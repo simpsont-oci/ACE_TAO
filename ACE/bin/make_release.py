@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/local/bin/python2.5
 
 # @file make_release.py
 # @author William R. Otte <wotte@dre.vanderbilt.edu>
@@ -106,16 +106,13 @@ def parse_args ():
                        # By default get repo root from working copy
                        # default="https://svn.dre.vanderbilt.edu/DOC/")
 
-    parser.add_option ("--mpc_root", dest="mpc_root", action="store",
-                       help="Specify an alternate MPC repository root",
-                       default=None)
-                       # By default get repo root from MPC root in working copy
-
     parser.add_option ("-n", dest="take_action", action="store_false",
                        help="Take no action", default=True)
     parser.add_option ("--verbose", dest="verbose", action="store_true",
                        help="Print out actions as they are being performed",
                        default=False)
+    parser.add_option ("--override-host", dest="override_host", action="store_true",
+                       help="Override the default release host.  Not reccomended", default=False)
     (options, arguments) = parser.parse_args ()
 
     if options.action is None:
@@ -168,6 +165,12 @@ def check_environment ():
         print "ERROR: Must define MAILID environment to your email address for changelogs."
         return False
 
+    from socket import gethostname
+
+    if ((not opts.override_host) and gethostname () != "anduril.dre.vanderbilt.edu"):
+        print "ERROR: Must run script on anduril.dre.vanderbilt.edu"
+        return False
+
     return True
 
 def vprint (string):
@@ -213,13 +216,7 @@ def check_workspace ():
         info = svn_client.info2 (doc_root + "/ACE")[0]
         opts.repo_root = info[1]["repos_root_URL"]
 
-    # By default retrieve MPC root from working copy
-    if opts.mpc_root is None:
-        info = svn_client.info2 (doc_root + "/ACE/MPC")[0]
-        opts.mpc_root = info[1]["repos_root_URL"]
-
     vprint ("Repos root URL = " + opts.repo_root + "\n")
-    vprint ("Repos MPC root URL = " + opts.mpc_root + "\n")
 
 
 def update_version_files (component):
@@ -586,8 +583,8 @@ def tag ():
                         opts.repo_root + "/tags/" + branch)
 
         # Tag MPC
-        svn_client.copy (opts.mpc_root + "/trunk",
-                        opts.mpc_root + "/tags/" + branch)
+        svn_client.copy (opts.repo_root + "/MPC/trunk",
+                        opts.repo_root + "/MPC/tags/" + branch)
 
         # Update latest tag
         # mcorino@remedy.nl - subversion does not seem to support propset directly
@@ -603,8 +600,8 @@ def tag ():
                     #update_latest_tag ("BFO", branch)
     else:
         print "Creating tags:\n"
-        print opts.repo_root + "/trunk -> " + opts.repo_root + "/tags/" + branch + "\n"
-        print opts.mpc_root + "/trunk -> " + opts.mpc_root + "/tags/" + branch + "\n"
+        print opts.repo_root + "/Middleware/tags/" + branch + "\n"
+        print opts.repo_root + "/MPC/tags/" + branch + "\n"
 
 ##################################################
 #### Packaging methods
@@ -865,6 +862,9 @@ def generate_workspaces (stage_dir):
     mpc_option += ' -relative CIAO_ROOT=' + stage_dir + '/ACE_wrappers/TAO/CIAO '
     mpc_option += ' -relative DANCE_ROOT=' + stage_dir + '/ACE_wrappers/TAO/CIAO/DAnCE '
 
+    static_vc71_option = ' -static -name_modifier *_vc71_Static -apply_project -exclude TAO/CIAO '
+    static_vc71_option += mpc_option
+
     static_vc8_option = ' -static -name_modifier *_vc8_Static -apply_project -exclude TAO/CIAO '
     static_vc8_option += mpc_option
 
@@ -873,6 +873,7 @@ def generate_workspaces (stage_dir):
 
     vc9_option = ' -name_modifier *_vc9 '
     vc8_option = ' -name_modifier *_vc8 '
+    vc71_option = ' -name_modifier *_vc71 '
 
     # Build option string for VC8 platforms
     ce_option = ' -name_modifier *_vc8_WinCE -features "uses_wchar=1,wince=1" '
@@ -880,16 +881,12 @@ def generate_workspaces (stage_dir):
     ce_option += ' -value_template platforms+=\'"Windows Mobile 5.0 Smartphone SDK (ARMV4I)"\' '
     ce_option += ' -value_template platforms+=\'"Windows Mobile 6 Standard SDK (ARMV4I)"\' '
     ce_option += ' -value_template platforms+=\'"Windows Mobile 6 Professional SDK (ARMV4I)"\' '
-    ce_option += ' -exclude TAO/CIAO '
 
     redirect_option = str ()
     if not opts.verbose:
         redirect_option = " >> ../mpc.log 2>&1"
 
     # Generate GNUmakefiles
-    print "\tBootstrapping autotools support"
-    ex ("bin/bootstrap " + redirect_option)
-
     print "\tGenerating GNUmakefiles...."
     ex (mpc_command + " -type gnuace " + exclude_option + mpc_option + redirect_option)
 
@@ -902,11 +899,20 @@ def generate_workspaces (stage_dir):
     print "\tGenerating VC8 Windows CE solutions..."
     ex (mpc_command + " -type vc8 " + mpc_option + ce_option + redirect_option)
 
+    print "\tGenerating VC71 solutions..."
+    ex (mpc_command + " -type vc71 " + mpc_option + vc71_option + redirect_option)
+
+    print "\tGenerating VC71 Static solutions"
+    ex (mpc_command + " -type vc71 " + static_vc71_option + redirect_option)
+
     print "\tGenerating VC8 Static solutions"
     ex (mpc_command + " -type vc8 " + static_vc8_option + redirect_option)
 
     print "\tGenerating VC9 Static solutions"
     ex (mpc_command + " -type vc9 " + static_vc9_option + redirect_option)
+
+    print "\tBootstrapping autotools support"
+    ex ("bin/bootstrap " + redirect_option)
 
     print "\tCorrecting permissions for all generated files..."
     ex ("find ./ -name '*.vc[p,w]' -or -name '*.bmak' -or -name '*.vcproj' -or -name '*.sln' -or -name 'GNUmake*' | xargs chmod 0644")

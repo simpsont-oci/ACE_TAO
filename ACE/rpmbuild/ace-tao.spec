@@ -2357,7 +2357,7 @@ fi
 %doc TAO/VERSION
 %doc TAO/README
 %doc TAO/utils/catior/README.catior
-%doc TAO/utils/nslist/README.nslist
+%doc TAO/utils/catior/README.nslist
 
 # ---------------- tao-cosnaming ----------------
 

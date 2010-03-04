@@ -206,15 +206,15 @@ for ($i = 0; $i < $nr_daemon; ++$i) {
     }
 }
 
-print "Sleeping 300 seconds to allow task to complete\n";
-sleep (300);
+print "Sleeping 180 seconds to allow task to complete\n";
+sleep (180);
 
 # Invoke executor - stop the application -.
 print "Invoking executor - stop the application -\n";
 print "by running dance_plan_launcher.exe with -k file://$ior_emfile -x $cdp_file -q\n";
 
 $E = $tg_executor->CreateProcess ("$DANCE_ROOT/bin/dance_plan_launcher",
-                        "-k file://$ior_emfile -x $cdp_file -s");
+                        "-k file://$ior_emfile -x $cdp_file -q");
 $E->SpawnWaitKill ($tg_executor->ProcessStopWaitInterval ());
 
 print "Executor returned.\n";

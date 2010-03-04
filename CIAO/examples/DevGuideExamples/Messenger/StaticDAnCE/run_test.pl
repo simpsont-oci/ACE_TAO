@@ -81,7 +81,7 @@ $EX = $tg->CreateProcess ("$DANCE_ROOT/bin/dance_plan_launcher",
 
 #Stop the plan launcher
 $EX2 = $tg->CreateProcess ("$DANCE_ROOT/bin/dance_plan_launcher",
-                             "-k file://$emior -x Application-flattened_Unhomed.cdp -s");
+                             "-k file://$emior -x Application-flattened_Unhomed.cdp");
 
 $Ret6 = $EX->Spawn ();
 if($Ret6 == -1) {

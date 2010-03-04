@@ -21,7 +21,7 @@ namespace CIAO_Simple_SimpleProvider_Impl
       public virtual ::CORBA::LocalObject
   {
     public:
-    Trigger_exec_i (bool &);
+    Trigger_exec_i (void);
     virtual ~Trigger_exec_i (void);
 
     // Operations from ::Simple::Trigger
@@ -29,9 +29,6 @@ namespace CIAO_Simple_SimpleProvider_Impl
     virtual void
     hello (
       const char * hello);
-    
-  private:
-    bool &triggered_;
   };
 
   class SIMPLEPROVIDER_EXEC_Export SimpleProvider_exec_i
@@ -67,7 +64,6 @@ namespace CIAO_Simple_SimpleProvider_Impl
 
     private:
     ::Simple::CCM_SimpleProvider_Context_var context_;
-    bool triggered_;
   };
 
   class SIMPLEPROVIDER_EXEC_Export SimpleProviderHome_exec_i
