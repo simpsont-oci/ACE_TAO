@@ -1468,11 +1468,13 @@ ip_check (int &ipvn_enabled, int pf)
   // Perform Double-Checked Locking Optimization.
   ACE_MT (ACE_GUARD_RETURN (ACE_Recursive_Thread_Mutex, ace_mon,
                             *ACE_Static_Object_Lock::instance (), 0));
-
   if (ipvn_enabled == -1)
     {
 
 #if defined (ACE_WIN32)
+      static int recursing = 0;
+      if (recursing) return recursing;
+
       // as of the release of Windows 2008, even hosts that have IPv6 interfaces disabled
       // will still permit the creation of a PF_INET6 socket, thus rendering the socket
       // creation test inconsistent. The recommended solution is to get the list of
@@ -1480,13 +1482,16 @@ ip_check (int &ipvn_enabled, int pf)
       ACE_INET_Addr *if_addrs = 0;
       size_t if_cnt = 0;
 
-      ipvn_enabled = 1; // assume enabled to avoid recursion during interface lookup.
+      // assume enabled to avoid recursion during interface lookup.
+      recursing = 1;
       ACE::get_ip_interfaces (if_cnt, if_addrs);
-      ipvn_enabled = 0;
-      for (size_t i = 0; ipvn_enabled == 0 && i < if_cnt; i++)
+      recursing = 0;
+      bool found = false;
+      for (size_t i = 0; !found && i < if_cnt; i++)
         {
-          ipvn_enabled = (if_addrs[i].get_type () == pf);
+          found = (if_addrs[i].get_type () == pf);
         }
+      ipvn_enabled = found ? 1 : 0;
       delete [] if_addrs;
 #else
       // Determine if the kernel has IPv6 support by attempting to
