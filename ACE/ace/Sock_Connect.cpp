@@ -1519,12 +1519,14 @@ bool
 ACE::ipv4_enabled (void)
 {
 #if defined (ACE_HAS_IPV6)
+  ACE_DEBUG((LM_DEBUG, "(%P|%t) ipv4_enabled() - ace_ipv4_enabled = %d\n", ace_ipv4_enabled));
   return static_cast<bool> (ace_ipv4_enabled == -1 ?
                             ::ip_check (ace_ipv4_enabled, PF_INET) :
                             ace_ipv4_enabled);
 #else
  // Assume it's always enabled since ACE requires some version of
  // TCP/IP to exist.
+  ACE_DEBUG((LM_DEBUG, "(%P|%t) ipv4_enabled() - TRUE\n"));
   return true;
 #endif  /* ACE_HAS_IPV6*/
 }
@@ -1533,10 +1535,12 @@ int
 ACE::ipv6_enabled (void)
 {
 #if defined (ACE_HAS_IPV6)
+  ACE_DEBUG((LM_DEBUG, "(%P|%t) ipv6_enabled() - ace_ipv6_enabled = %d\n", ace_ipv6_enabled));
   return ace_ipv6_enabled == -1 ?
     ::ip_check (ace_ipv6_enabled, PF_INET6) :
     ace_ipv6_enabled;
 #else /* ACE_HAS_IPV6 */
+  ACE_DEBUG((LM_DEBUG, "(%P|%t) ipv6_enabled() - FALSE\n"));
   return 0;
 #endif /* !ACE_HAS_IPV6 */
 }
