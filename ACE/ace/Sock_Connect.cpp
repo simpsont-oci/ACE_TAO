@@ -1488,6 +1488,10 @@ ip_check (int &ipvn_enabled, int pf)
       recursing = 1;
       ACE::get_ip_interfaces (if_cnt, if_addrs);
       recursing = 0;
+
+      // If the list of interfaces is empty, we've tried too quickly. Assume enabled, but don't cache the result
+      if (!if_cnt) return true;
+
       bool found = false;
       for (size_t i = 0; !found && i < if_cnt; i++)
         {
