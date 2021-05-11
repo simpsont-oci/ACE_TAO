@@ -1464,12 +1464,10 @@ ACE::get_handle (void)
 static int
 ip_check (int &ipvn_enabled, int pf)
 {
-  ACE_DEBUG((LM_DEBUG, "(%P|%t) ip_check() - PRE-LOCK\n"));
   // We only get to this point if ipvn_enabled was -1 in the caller.
   // Perform Double-Checked Locking Optimization.
   ACE_MT (ACE_GUARD_RETURN (ACE_Recursive_Thread_Mutex, ace_mon,
                             *ACE_Static_Object_Lock::instance (), 0));
-  ACE_DEBUG((LM_DEBUG, "(%P|%t) ip_check() - POST-LOCK\n"));
   if (ipvn_enabled == -1)
     {
 
@@ -1498,6 +1496,7 @@ ip_check (int &ipvn_enabled, int pf)
           ACE_DEBUG((LM_DEBUG, "(%P|%t) ip_check() - considering addr %C:%d (%C)\n", if_addrs[i].get_host_addr(), if_addrs[i].get_port_number(), if_addrs[i].get_host_name()));
           found = (if_addrs[i].get_type () == pf);
         }
+      ACE_DEBUG((LM_DEBUG, "(%P|%t) ip_check() - Setting ipvn_enabled to %C\n", found ? "true" : "false"));
       ipvn_enabled = found ? 1 : 0;
       delete [] if_addrs;
 #else
@@ -1523,14 +1522,12 @@ bool
 ACE::ipv4_enabled (void)
 {
 #if defined (ACE_HAS_IPV6)
-  ACE_DEBUG((LM_DEBUG, "(%P|%t) ipv4_enabled() - ace_ipv4_enabled = %d\n", ace_ipv4_enabled));
   return static_cast<bool> (ace_ipv4_enabled == -1 ?
                             ::ip_check (ace_ipv4_enabled, PF_INET) :
                             ace_ipv4_enabled);
 #else
  // Assume it's always enabled since ACE requires some version of
  // TCP/IP to exist.
-  ACE_DEBUG((LM_DEBUG, "(%P|%t) ipv4_enabled() - TRUE\n"));
   return true;
 #endif  /* ACE_HAS_IPV6*/
 }
@@ -1539,12 +1536,10 @@ int
 ACE::ipv6_enabled (void)
 {
 #if defined (ACE_HAS_IPV6)
-  ACE_DEBUG((LM_DEBUG, "(%P|%t) ipv6_enabled() - ace_ipv6_enabled = %d\n", ace_ipv6_enabled));
   return ace_ipv6_enabled == -1 ?
     ::ip_check (ace_ipv6_enabled, PF_INET6) :
     ace_ipv6_enabled;
 #else /* ACE_HAS_IPV6 */
-  ACE_DEBUG((LM_DEBUG, "(%P|%t) ipv6_enabled() - FALSE\n"));
   return 0;
 #endif /* !ACE_HAS_IPV6 */
 }
