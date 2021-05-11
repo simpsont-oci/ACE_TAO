@@ -1464,10 +1464,12 @@ ACE::get_handle (void)
 static int
 ip_check (int &ipvn_enabled, int pf)
 {
+  ACE_DEBUG((LM_DEBUG, "(%P|%t) ip_check() - PRE-LOCK\n"));
   // We only get to this point if ipvn_enabled was -1 in the caller.
   // Perform Double-Checked Locking Optimization.
   ACE_MT (ACE_GUARD_RETURN (ACE_Recursive_Thread_Mutex, ace_mon,
                             *ACE_Static_Object_Lock::instance (), 0));
+  ACE_DEBUG((LM_DEBUG, "(%P|%t) ip_check() - POST-LOCK\n"));
   if (ipvn_enabled == -1)
     {
 
@@ -1489,6 +1491,7 @@ ip_check (int &ipvn_enabled, int pf)
       bool found = false;
       for (size_t i = 0; !found && i < if_cnt; i++)
         {
+          ACE_DEBUG((LM_DEBUG, "(%P|%t) ip_check() - considering addr %C:%d (%C)\n", if_addr[i].get_host_addr(), if_addr[i].get_port_number(), if_addr[i].get_host_name()));
           found = (if_addrs[i].get_type () == pf);
         }
       ipvn_enabled = found ? 1 : 0;
