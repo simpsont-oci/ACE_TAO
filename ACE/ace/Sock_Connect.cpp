@@ -107,10 +107,10 @@ namespace
   //  Used internally so not exported.
 
   // Does this box have ipv4 turned on?
-  int ace_ipv4_enabled = -1;
+  static int ace_ipv4_enabled = -1;
 
   // Does this box have ipv6 turned on?
-  int ace_ipv6_enabled = -1;
+  static int ace_ipv6_enabled = -1;
 
 }
 #else /* ACE_HAS_IPV6 */
