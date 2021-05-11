@@ -1491,7 +1491,7 @@ ip_check (int &ipvn_enabled, int pf)
       bool found = false;
       for (size_t i = 0; !found && i < if_cnt; i++)
         {
-          ACE_DEBUG((LM_DEBUG, "(%P|%t) ip_check() - considering addr %C:%d (%C)\n", if_addr[i].get_host_addr(), if_addr[i].get_port_number(), if_addr[i].get_host_name()));
+          ACE_DEBUG((LM_DEBUG, "(%P|%t) ip_check() - considering addr %C:%d (%C)\n", if_addrs[i].get_host_addr(), if_addrs[i].get_port_number(), if_addrs[i].get_host_name()));
           found = (if_addrs[i].get_type () == pf);
         }
       ipvn_enabled = found ? 1 : 0;
