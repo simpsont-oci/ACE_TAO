@@ -107,10 +107,10 @@ namespace
   //  Used internally so not exported.
 
   // Does this box have ipv4 turned on?
-  static int ace_ipv4_enabled = -1;
+  int ace_ipv4_enabled = -1;
 
   // Does this box have ipv6 turned on?
-  static int ace_ipv6_enabled = -1;
+  int ace_ipv6_enabled = -1;
 
 }
 #else /* ACE_HAS_IPV6 */
@@ -1487,18 +1487,17 @@ ip_check (int &ipvn_enabled, int pf)
       ACE::get_ip_interfaces (if_cnt, if_addrs);
       recursing = 0;
 
-      // If the list of interfaces is empty, we've tried too quickly. Assume enabled, but don't cache the result
-      if (!if_cnt) return true;
-
       bool found = false;
       for (size_t i = 0; !found && i < if_cnt; i++)
         {
-          ACE_DEBUG((LM_DEBUG, "(%P|%t) ip_check() - considering addr %C:%d (%C)\n", if_addrs[i].get_host_addr(), if_addrs[i].get_port_number(), if_addrs[i].get_host_name()));
           found = (if_addrs[i].get_type () == pf);
         }
-      ACE_DEBUG((LM_DEBUG, "(%P|%t) ip_check() - Setting ipvn_enabled to %C\n", found ? "true" : "false"));
-      ipvn_enabled = found ? 1 : 0;
       delete [] if_addrs;
+
+      // If the list of interfaces is empty, we've tried too quickly. Assume enabled, but don't cache the result
+      if (!if_cnt) return true;
+
+      ipvn_enabled = found ? 1 : 0;
 #else
       // Determine if the kernel has IPv6 support by attempting to
       // create a PF_INET6 socket and see if it fails.
