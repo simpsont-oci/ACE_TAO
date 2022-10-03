@@ -190,7 +190,7 @@ jobs:
       if: matrix.optional_feature != ''
       shell: pwsh
     - name: initialize CodeQL
-      uses: github/codeql-action/init@v1
+      uses: github/codeql-action/init@v2
       with:
         languages: cpp
       if: matrix.feature == 'CodeQL'
@@ -211,5 +211,5 @@ jobs:
         make -j 6 -C ${env:ACE_ROOT}/tests
       shell: pwsh
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v1
+      uses: github/codeql-action/analyze@v2
       if: matrix.feature == 'CodeQL'
