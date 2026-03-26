@@ -227,9 +227,9 @@ namespace TAO
     transport_type *&transport,
     size_t &busy_count)
   {
-    if (prop == 0)
+    if (prop == nullptr)
       {
-        transport = 0;
+        transport = nullptr;
         return CACHE_FOUND_NONE;
       }
 
@@ -299,6 +299,9 @@ namespace TAO
                 found = CACHE_FOUND_AVAILABLE;
                 found_entry = entry;
                 entry->item ().recycle_state (ENTRY_BUSY);
+                // We found a transport we can use, so cancel its idle timer
+                // with the lock held
+                entry->item().transport ()->cancel_idle_timer ();
 
                 if (TAO_debug_level > 6)
                   {

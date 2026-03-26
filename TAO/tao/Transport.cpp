@@ -325,6 +325,9 @@ void
 TAO_Transport::close_connection ()
 {
   this->connection_handler_i ()->close_connection ();
+
+  // Cancel any pending time
+  this->cancel_idle_timer ();
 }
 
 int
@@ -2849,9 +2852,7 @@ TAO_Transport::post_open (size_t id)
                                                    true);
 
   // update transport cache to make this entry available
-  this->transport_cache_manager ().set_entry_state (
-    this->cache_map_entry_,
-    TAO::ENTRY_IDLE_AND_PURGABLE);
+  this->transport_cache_manager ().set_entry_state (this->cache_map_entry_, TAO::ENTRY_IDLE_AND_PURGABLE);
 
   return true;
 }

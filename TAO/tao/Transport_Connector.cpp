@@ -705,8 +705,7 @@ TAO_Connector::connect (TAO::Profile_Transport_Resolver *r,
             }
           else // not making new connection
             {
-              (void) this->wait_for_transport (r, base_transport,
-                                               timeout, true);
+              (void) this->wait_for_transport (r, base_transport, timeout, true);
               base_transport->remove_reference ();
             }
         }
