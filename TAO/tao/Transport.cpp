@@ -547,7 +547,12 @@ TAO_Transport::make_idle ()
                   this->id ()));
     }
 
-  return this->transport_cache_manager ().make_idle (this->cache_map_entry_);
+  int const result = this->transport_cache_manager ().make_idle (this->cache_map_entry_);
+  if (result == 0)
+    {
+      this->schedule_idle_timer ();
+    }
+  return result;
 }
 
 int
@@ -2909,5 +2914,27 @@ TAO_Transport::connection_closed_on_read () const
 {
   return connection_closed_on_read_;
 }
+
+void
+TAO_Transport::schedule_idle_timer ()
+{
+  int const timeout_sec = this->orb_core_->resource_factory ()->transport_idle_timeout ();
+  if (timeout_sec >= 0)
+    {
+      ACE_Reactor *reactor = this->orb_core_->reactor ();
+      const ACE_Time_Value tv (static_cast<time_t> (timeout_sec));
+      this->idle_timer_id_= reactor->schedule_timer (std::addressof(this->transport_idle_timer_), nullptr, tv);
+
+      if (TAO_debug_level > 0)
+        {
+          TAOLIB_ERROR ((LM_ERROR,
+                  ACE_TEXT ("TAO (%P|%t) - Transport[%d]::schedule_idle_timer , ")
+                  ACE_TEXT ("schedule for idle with timerid [%d] ")
+                  ACE_TEXT ("in the reactor.\n"),
+                  this->id (), this->idle_timer_id_));
+        }
+    }
+}
+
 
 TAO_END_VERSIONED_NAMESPACE_DECL

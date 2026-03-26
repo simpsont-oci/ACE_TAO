@@ -1058,10 +1058,8 @@ private:
    */
   bool using_blocking_io_for_asynch_messages() const;
 
-  /*
-   * Specialization hook to add concrete private methods from
-   * TAO's protocol implementation onto the base Transport class
-   */
+  /// Helper method to schedule a timer when the transport is made idle
+  void schedule_idle_timer ();
 
 protected:
   /// IOP protocol tag.

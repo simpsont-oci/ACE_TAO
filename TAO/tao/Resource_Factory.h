@@ -254,6 +254,8 @@ public:
   /// replies during shutdown.
   virtual bool drop_replies_during_shutdown () const = 0;
 
+  virtual int transport_idle_timeout () const = 0;
+
 protected:
   /**
    * Loads the default protocols. This method is used so that the
