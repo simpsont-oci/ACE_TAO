@@ -95,6 +95,7 @@ namespace TAO
     if (entry == nullptr) // in case someone beat us to it (entry is reference to transport member)
       return false;
 
+    // @todo check if the state is idle and purgable, if so, then make the state so that it can't be used to make this atomic
     return entry->item ().recycle_state () == ENTRY_IDLE_AND_PURGABLE;
   }
 

@@ -322,7 +322,6 @@ TAO_Default_Resource_Factory::init (int argc, ACE_TCHAR *argv[])
         else
           this->report_option_value_error (ACE_TEXT("-ORBConnectionCacheMax"), argv[curarg]);
       }
-
    else if (ACE_OS::strcasecmp (argv[curarg],
                                 ACE_TEXT("-ORBConnectionCachePurgePercentage")) == 0)
       {
@@ -483,6 +482,14 @@ TAO_Default_Resource_Factory::init (int argc, ACE_TCHAR *argv[])
         TAOLIB_DEBUG ((LM_WARNING,
                     ACE_TEXT ("Zero copy writes unsupported on this platform\n")));
 #endif  /* TAO_HAS_SENDFILE==1 */
+      }
+    else if (0 == ACE_OS::strcasecmp (argv[curarg], ACE_TEXT("-ORBTransportIdleTimeout")))
+      {
+        ++curarg;
+        if (curarg < argc)
+            this->transport_idle_timeout_ = ACE_OS::atoi (argv[curarg]);
+        else
+          this->report_option_value_error (ACE_TEXT("-ORBTransportIdleTimeout"), argv[curarg]);
       }
     else if (ACE_OS::strncmp (argv[curarg],
                               ACE_TEXT ("-ORB"),
@@ -1215,6 +1222,11 @@ bool
 TAO_Default_Resource_Factory::drop_replies_during_shutdown () const
 {
   return this->drop_replies_;
+}
+
+int TAO_Default_Resource_Factory::transport_idle_timeout () const
+{
+  return this->transport_idle_timeout_;
 }
 
 // ****************************************************************

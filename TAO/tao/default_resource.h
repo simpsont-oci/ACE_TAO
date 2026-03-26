@@ -184,6 +184,7 @@ public:
                                    CORBA::ULong max_message_size) const;
   virtual void disable_factory ();
   virtual bool drop_replies_during_shutdown () const;
+  virtual int transport_idle_timeout () const;
  //@}
 
 protected:
@@ -314,6 +315,10 @@ private:
   /// Flag to indicate whether replies should be dropped during ORB
   /// shutdown.
   bool drop_replies_;
+
+  /// Amount of seconds after which an idle transport will be closed
+  /// 0 means no closing of idle connections (default)
+  int transport_idle_timeout_ { 0 };
 };
 
 ACE_STATIC_SVC_DECLARE_EXPORT (TAO, TAO_Default_Resource_Factory)
