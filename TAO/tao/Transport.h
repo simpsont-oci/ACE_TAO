@@ -1061,6 +1061,9 @@ private:
   /// Helper method to schedule a timer when the transport is made idle
   void schedule_idle_timer ();
 
+  /// Helper method to cancel the timer when the transport is not idle anymore
+  void cancel_idle_timer ();
+
 protected:
   /// IOP protocol tag.
   CORBA::ULong const tag_;

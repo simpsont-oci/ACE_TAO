@@ -44,17 +44,9 @@ namespace TAO
     int handle_timeout (const ACE_Time_Value &current_time,
                         const void *act = nullptr) override;
 
-    /// Cancel a pending timer (safe to call even if not armed).
-    void cancel ();
-
-    /// Record the timer ID returned by schedule_timer().
-    void timer_id (long id) { timer_id_ = id; }
-    long timer_id () const  { return timer_id_; }
-
   private:
     // todo, var
     TAO_Transport *transport_;  ///< Non-owning pointer
-    long           timer_id_ { -1 };   ///< -1 when not armed
   };
 }
 

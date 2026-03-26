@@ -18,20 +18,6 @@ namespace TAO
   {
     return this->transport_->handle_idle_timeout (current_time, act);
   }
-
-  void
-  Transport_Idle_Timer::cancel ()
-  {
-    // if (this->timer_id_ != -1 && this->transport_)
-    //   {
-    //     ACE_Reactor *reactor = this->transport_->orb_core ()->reactor ();
-    //     if (reactor)
-    //       {
-    //         reactor->cancel_timer (this->timer_id_);
-    //         this->timer_id_ = -1;
-    //       }
-    //   }
-  }
 }
 
 TAO_END_VERSIONED_NAMESPACE_DECL

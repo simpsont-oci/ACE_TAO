@@ -2925,16 +2925,37 @@ TAO_Transport::schedule_idle_timer ()
       const ACE_Time_Value tv (static_cast<time_t> (timeout_sec));
       this->idle_timer_id_= reactor->schedule_timer (std::addressof(this->transport_idle_timer_), nullptr, tv);
 
-      if (TAO_debug_level > 0)
+      if (TAO_debug_level > 6)
         {
           TAOLIB_ERROR ((LM_ERROR,
                   ACE_TEXT ("TAO (%P|%t) - Transport[%d]::schedule_idle_timer , ")
-                  ACE_TEXT ("schedule for idle with timerid [%d] ")
+                  ACE_TEXT ("schedule idle timer with id [%d] ")
                   ACE_TEXT ("in the reactor.\n"),
                   this->id (), this->idle_timer_id_));
         }
     }
 }
 
+void
+TAO_Transport::cancel_idle_timer ()
+{
+  if (this->idle_timer_id_ != -1)
+    {
+      ACE_Reactor *reactor = this->orb_core ()->reactor ();
+      if (reactor)
+        {
+          if (TAO_debug_level > 6)
+            {
+              TAOLIB_ERROR ((LM_ERROR,
+                      ACE_TEXT ("TAO (%P|%t) - Transport[%d]::cancel_idle_timer , ")
+                      ACE_TEXT ("cancel idle timer with id [%d] ")
+                      ACE_TEXT ("from the reactor.\n"),
+                      this->id (), this->idle_timer_id_));
+            }
+          reactor->cancel_timer (this->idle_timer_id_);
+          this->idle_timer_id_ = -1;
+        }
+    }
+}
 
 TAO_END_VERSIONED_NAMESPACE_DECL
