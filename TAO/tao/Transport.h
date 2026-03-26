@@ -1173,7 +1173,7 @@ private:
   /// @@Phil, I think it would be nice if we could think of a way to
   /// do the following.
   /// We have been trying to use the transport for marking about
-  /// translator factories and such! IMHO this is a wrong encapulation
+  /// translator factories and such! IMHO this is a wrong encapsulation
   /// ie. trying to populate the transport object with these
   /// details. We should probably have a class something like
   /// TAO_Message_Property or TAO_Message_Translator or whatever (I am
