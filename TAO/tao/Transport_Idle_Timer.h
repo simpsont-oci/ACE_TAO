@@ -11,14 +11,13 @@
 #define TAO_TRANSPORT_IDLE_TIMER_H
 
 #include /**/ "ace/pre.h"
-
 #include "ace/Event_Handler.h"
 
 #if !defined (ACE_LACKS_PRAGMA_ONCE)
 # pragma once
 #endif /* ACE_LACKS_PRAGMA_ONCE */
 
-#include "tao/orbconf.h"
+#include /**/ "tao/Versioned_Namespace.h"
 
 TAO_BEGIN_VERSIONED_NAMESPACE_DECL
 

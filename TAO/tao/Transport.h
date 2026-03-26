@@ -1126,7 +1126,7 @@ protected:
   long idle_timer_id_ { -1 };
 
   /// The adapter used to receive timeout callbacks from the Reactor
-  TAO_Transport_Timer transport_timer_;
+  TAO::Transport_Timer transport_timer_;
 
   /// The adapter used to receive idle timeout callbacks from the Reactor
   TAO::Transport_Idle_Timer transport_idle_timer_;
