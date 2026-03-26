@@ -127,8 +127,8 @@ TAO_Transport::TAO_Transport (CORBA::ULong tag,
   , tail_ (nullptr)
   , incoming_message_queue_ (orb_core)
   , current_deadline_ (ACE_Time_Value::zero)
-  , flush_timer_id_ (-1)
   , transport_timer_ (this)
+  , transport_idle_timer_ (this)
   , handler_lock_ (orb_core->resource_factory ()->create_cached_connection_lock ())
   , id_ ((size_t) this)
   , purging_order_ (0)
@@ -955,6 +955,42 @@ TAO_Transport::handle_timeout (const ACE_Time_Value & /* current_time */,
     }
 
   return 0;
+}
+
+int
+TAO_Transport::handle_idle_timeout (const ACE_Time_Value & /* current_time */, const void */*act*/)
+{
+  if (TAO_debug_level > 6)
+    {
+      TAOLIB_DEBUG ((LM_DEBUG,
+         ACE_TEXT ("TAO (%P|%t) - Transport[%d]::handle_idle_timeout, ")
+         ACE_TEXT ("idle timer expired, closing transport\n"),
+         this->id ()));
+    }
+
+    // Confirm transport is still idle under the handler lock to
+    // prevent a race with find_idle_transport_i().
+    {
+      ACE_GUARD_RETURN (ACE_Lock, mon, *this->handler_lock_, 0);
+      if (!this->transport_cache_manager ().is_idle (this->cache_map_entry_))
+      {
+          if (TAO_debug_level > 0)
+          TAOLIB_DEBUG ((LM_DEBUG,
+              ACE_TEXT ("TAO (%P|%t) - Transport[%d]::handle_idle_timeout, ")
+              ACE_TEXT ("idle_timeout, transport is not idle, don't close it\n"),
+              this->id ()));
+
+        return 0;  // Raced — transport is busy now; leave it open
+      }
+    }
+
+
+    // Purge from cache then close the underlying socket.
+    // close_connection() is safe to call from the reactor thread.
+    (void) this->purge_entry ();
+    (void) this->close_connection ();
+
+    return 0;
 }
 
 TAO_Transport::Drain_Result

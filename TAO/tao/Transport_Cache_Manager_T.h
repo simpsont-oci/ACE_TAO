@@ -133,6 +133,9 @@ namespace TAO
     /// Make the entry idle and ready for use.
     int make_idle (HASH_MAP_ENTRY *&entry);
 
+    /// Check if the entry is idle
+    bool is_idle (HASH_MAP_ENTRY *&entry) const;
+
     /// Modify the state setting on the provided entry.
     void set_entry_state (HASH_MAP_ENTRY *&entry,
                           TAO::Cache_Entries_State state);
