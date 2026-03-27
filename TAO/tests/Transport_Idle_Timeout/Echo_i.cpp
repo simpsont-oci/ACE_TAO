@@ -1,6 +1,7 @@
 #include "Echo_i.h"
 #include "tao/ORB_Core.h"
 #include "tao/Transport_Cache_Manager_T.h"
+#include "tao/Thread_Lane_Resources.h"
 #include "tao/debug.h"
 #include "ace/Log_Msg.h"
 #include "ace/OS_NS_string.h"

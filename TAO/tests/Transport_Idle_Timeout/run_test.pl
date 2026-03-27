@@ -1,6 +1,5 @@
 #!/usr/bin/perl
-# TAO/tests/Idle_Transport_Timeout/run_test.pl
-#
+
 # Test driver for the idle-transport-timeout regression test.
 # Follows the standard TAO test-script conventions used throughout
 # TAO/tests/ (PerlACE helpers, two-process server/client, IOR handshake).
@@ -20,6 +19,16 @@ use PerlACE::TestTarget;
 my $ior_file = "test.ior";
 my $timeout_sec = 3;   # must match svc.conf value
 my $status = 0;
+my $debug_level = '0';
+my $cdebug_level = '0';
+foreach my $i (@ARGV) {
+    if ($i eq '-debug') {
+        $debug_level = '10';
+    }
+    if ($i eq '-cdebug') {
+      $cdebug_level = '10';
+    }
+}
 
 sub run_scenario {
     my ($label, $svc_conf, $extra_client_args) = @_;
@@ -37,12 +46,12 @@ sub run_scenario {
 
     my $SV = $server->CreateProcess (
         "server",
-        "-ORBSvcConf $svc_conf -o $server_ior"
+        "-ORBdebuglevel $debug_level -ORBSvcConf $svc_conf -o $server_ior"
     );
 
     my $CL = $client->CreateProcess (
         "client",
-        "-ORBSvcConf $svc_conf -k file://$client_ior -t $timeout_sec $extra_client_args"
+        "-ORBdebuglevel $cdebug_level -ORBSvcConf $svc_conf -k file://$client_ior -t $timeout_sec $extra_client_args"
     );
 
     # Start server

@@ -2,7 +2,7 @@
 //
 // Writes its IOR to a file so that run_test.pl (and the client) can
 // locate it.  Accepts a configurable svc.conf via -ORBSvcConf so the
-// test driver can set -ORBIdleTransportTimeout to a small value.
+// test driver can set -ORBTransportIdleTimeout to a small value.
 
 #include "Echo_i.h"
 #include "ace/Get_Opt.h"

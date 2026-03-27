@@ -19,12 +19,12 @@
 //        Then sleep past the timeout and verify cache_size == 0.
 //
 //  TC-4  Disabled timeout (opt-out)
-//        A second ORB is initialised with -ORBIdleTransportTimeout 0.
+//        A second ORB is initialised with -ORBTransportIdleTimeout 0.
 //        After sleeping well past the default 60 s timeout (we use a
 //        short test timeout of 3 s so the second ORB uses 0 = disabled),
 //        cache_size still reflects the connection is open.
 //        NOTE: This scenario requires a separate server run with
-//        -ORBIdleTransportTimeout 0 in its svc.conf; run_test.pl
+//        -ORBTransportIdleTimeout 0 in its svc.conf; run_test.pl
 //        handles this.  Within this binary TC-4 is a command-line flag.
 //
 // Usage:
@@ -40,6 +40,7 @@
 #include "ace/Get_Opt.h"
 #include "ace/OS_NS_unistd.h"
 #include "ace/Log_Msg.h"
+#include "ace/OS_NS_sys_time.h"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -239,7 +240,7 @@ tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
 // ---------------------------------------------------------------------------
 // TC-4 : Disabled timeout (opt-out)
 // ---------------------------------------------------------------------------
-// The server is started with -ORBIdleTransportTimeout 0 for this scenario.
+// The server is started with -ORBTransportIdleTimeout 0 for this scenario.
 // After sleeping well past the default timeout, the transport must still
 // be present (i.e. not closed).
 // ---------------------------------------------------------------------------
