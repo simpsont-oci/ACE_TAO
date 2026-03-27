@@ -1,0 +1,24 @@
+// -*- IDL -*-
+// TAO/tests/Idle_Transport_Timeout/test.idl
+//
+// Simple interface used by the idle-transport-timeout regression test.
+// The server exposes a single 'ping' operation so the client can
+// establish a real IIOP connection, then go silent and let the idle
+// timer fire.
+
+module Test
+{
+  interface Echo
+  {
+    /// Returns its argument unchanged.  Used to force a real round-trip
+    /// so that a transport is created and placed in the cache.
+    string ping (in string msg);
+
+    /// Ask the server to print its current transport-cache size.
+    /// Returns the number of IDLE entries visible to the server ORB.
+    long cache_size ();
+
+    /// Orderly shutdown.
+    oneway void shutdown ();
+  };
+};
