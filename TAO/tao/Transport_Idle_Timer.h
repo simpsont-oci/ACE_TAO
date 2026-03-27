@@ -52,4 +52,6 @@ namespace TAO
 
 TAO_END_VERSIONED_NAMESPACE_DECL
 
+#include /**/ "ace/post.h"
+
 #endif /* TAO_IDLE_TRANSPORT_TIMER_H */
