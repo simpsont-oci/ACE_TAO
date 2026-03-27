@@ -183,7 +183,7 @@ TAO_Transport::~TAO_Transport ()
 {
   if (TAO_debug_level > 9)
     {
-      TAOLIB_DEBUG ((LM_DEBUG, ACE_TEXT ("TAO (%P|%t) - Transport[%d]::~Transport\n"),
+      TAOLIB_DEBUG ((LM_DEBUG, ACE_TEXT ("TAO (%P|%t) - Transport[%d]::~Transport, start\n"),
                   this->id_));
     }
 
@@ -217,6 +217,11 @@ TAO_Transport::~TAO_Transport ()
 #if TAO_HAS_TRANSPORT_CURRENT == 1
   delete this->stats_;
 #endif /* TAO_HAS_TRANSPORT_CURRENT == 1 */
+  if (TAO_debug_level > 9)
+    {
+      TAOLIB_DEBUG ((LM_DEBUG, ACE_TEXT ("TAO (%P|%t) - Transport[%d]::~Transport, end\n"),
+                  this->id_));
+    }
 }
 
 void
@@ -324,10 +329,17 @@ TAO_Transport::register_if_necessary ()
 void
 TAO_Transport::close_connection ()
 {
-  this->connection_handler_i ()->close_connection ();
+  if (TAO_debug_level > 4)
+    {
+      TAOLIB_DEBUG ((LM_DEBUG,
+                  ACE_TEXT ("TAO (%P|%t) - Transport[%d]::close_connection\n"),
+                  this->id ()));
+    }
 
   // Cancel any pending time
   this->cancel_idle_timer ();
+
+  this->connection_handler_i ()->close_connection ();
 }
 
 int
@@ -378,8 +390,7 @@ TAO_Transport::register_handler ()
   this->ws_->is_registered (true);
 
   // Register the handler with the reactor
-  return r->register_handler (this->event_handler_i (),
-                              ACE_Event_Handler::READ_MASK);
+  return r->register_handler (this->event_handler_i (), ACE_Event_Handler::READ_MASK);
 }
 
 int
@@ -860,7 +871,7 @@ TAO_Transport::schedule_output_i ()
   ACE_Event_Handler * const eh = this->event_handler_i ();
   ACE_Reactor * const reactor = eh->reactor ();
 
-  if (reactor == nullptr)
+  if (!reactor)
     {
       if (TAO_debug_level > 1)
         {
@@ -948,17 +959,17 @@ TAO_Transport::handle_timeout (const ACE_Time_Value & /* current_time */,
       // pending.
       this->reset_flush_timer ();
 
-      TAO_Flushing_Strategy *flushing_strategy =
-        this->orb_core ()->flushing_strategy ();
+      TAO_Flushing_Strategy *flushing_strategy = this->orb_core ()->flushing_strategy ();
       int const result = flushing_strategy->schedule_output (this);
       if (result == TAO_Flushing_Strategy::MUST_FLUSH)
         {
           typedef ACE_Reverse_Lock<ACE_Lock> TAO_REVERSE_LOCK;
           TAO_REVERSE_LOCK reverse (*this->handler_lock_);
           ACE_GUARD_RETURN (TAO_REVERSE_LOCK, ace_mon, reverse, -1);
-          if (flushing_strategy->flush_transport (this, nullptr) == -1) {
-            return -1;
-          }
+          if (flushing_strategy->flush_transport (this, nullptr) == -1)
+            {
+              return -1;
+            }
         }
     }
 
@@ -976,29 +987,32 @@ TAO_Transport::handle_idle_timeout (const ACE_Time_Value & /* current_time */, c
          this->id ()));
     }
 
-    // Confirm transport is still idle under the handler lock to
-    // prevent a race with find_idle_transport_i().
+  // Timer has expired, so setting the idle timer id back to -1
+  this->idle_timer_id_ = -1;
+  this->add_reference (); // hack
+
+  // Confirm transport is still idle under the handler lock to
+  // prevent a race with find_idle_transport_i().
+  {
+    ACE_GUARD_RETURN (ACE_Lock, mon, *this->handler_lock_, 0);
+    if (!this->transport_cache_manager ().is_idle (this->cache_map_entry_))
     {
-      ACE_GUARD_RETURN (ACE_Lock, mon, *this->handler_lock_, 0);
-      if (!this->transport_cache_manager ().is_idle (this->cache_map_entry_))
-      {
-          if (TAO_debug_level > 0)
-          TAOLIB_DEBUG ((LM_DEBUG,
-              ACE_TEXT ("TAO (%P|%t) - Transport[%d]::handle_idle_timeout, ")
-              ACE_TEXT ("idle_timeout, transport is not idle, don't close it\n"),
-              this->id ()));
+        if (TAO_debug_level > 0)
+        TAOLIB_DEBUG ((LM_DEBUG,
+            ACE_TEXT ("TAO (%P|%t) - Transport[%d]::handle_idle_timeout, ")
+            ACE_TEXT ("idle_timeout, transport is not idle, don't close it\n"),
+            this->id ()));
 
-        return 0;  // Raced — transport is busy now; leave it open
-      }
+      return 0;  // Raced — transport is busy now; leave it open
     }
+  }
 
-
-    // Purge from cache then close the underlying socket.
-    // close_connection() is safe to call from the reactor thread.
-    (void) this->purge_entry ();
-    (void) this->close_connection ();
-
-    return 0;
+  // Purge from cache then close the underlying socket.
+  // close_connection() is safe to call from the reactor thread.
+  (void) this->purge_entry ();
+  (void) this->close_connection ();
+  this->remove_reference (); // hack
+  return 0;
 }
 
 TAO_Transport::Drain_Result
@@ -2773,8 +2787,7 @@ TAO_Transport::pre_close ()
   // of the is_connected_ flag, so that during cache lookups the cache
   // manager doesn't need to be burdened by the lock in is_connected().
   this->is_connected_ = false;
-  this->transport_cache_manager ().mark_connected (this->cache_map_entry_,
-                                                   false);
+  this->transport_cache_manager ().mark_connected (this->cache_map_entry_, false);
   this->purge_entry ();
   {
     ACE_MT (ACE_GUARD (ACE_Lock, guard, *this->handler_lock_));
@@ -2920,7 +2933,7 @@ void
 TAO_Transport::schedule_idle_timer ()
 {
   int const timeout_sec = this->orb_core_->resource_factory ()->transport_idle_timeout ();
-  if (timeout_sec >= 0)
+  if (timeout_sec > 0)
     {
       ACE_Reactor *reactor = this->orb_core_->reactor ();
       const ACE_Time_Value tv (static_cast<time_t> (timeout_sec));
@@ -2948,7 +2961,7 @@ TAO_Transport::cancel_idle_timer ()
           if (TAO_debug_level > 6)
             {
               TAOLIB_ERROR ((LM_ERROR,
-                      ACE_TEXT ("TAO (%P|%t) - Transport[%d]::cancel_idle_timer , ")
+                      ACE_TEXT ("TAO (%P|%t) - Transport[%d]::cancel_idle_timer, ")
                       ACE_TEXT ("cancel idle timer with id [%d] ")
                       ACE_TEXT ("from the reactor.\n"),
                       this->id (), this->idle_timer_id_));
