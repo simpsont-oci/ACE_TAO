@@ -2,7 +2,7 @@
  * @file Bug_1576_Regression_Test.cpp
  *
  * Reproduces the problems reported in bug 1576:
- *   http://bugzilla.dre.vanderbilt.edu/show_bug.cgi?id=1576
+ *   https://github.com/DOCGroup/bugzilla/issues/1576
  *
  * @author Carlos O'Ryan <coryan@atdesk.com>
  */

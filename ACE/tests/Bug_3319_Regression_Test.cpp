@@ -2,7 +2,7 @@
  * @file Bug_3319_Regression_Test.cpp
  *
  * Reproduces the problems reported in bug 2975:
- *   http://bugzilla.dre.vanderbilt.edu/show_bug.cgi?id=3319
+ *   https://github.com/DOCGroup/bugzilla/issues/3319
  */
 
 #include "ace/ACE.h"
