@@ -29,7 +29,7 @@ template<typename TYPE> class ACE_Timer_Node_T;
  * This is a base class for all the timer queues, regardless of
  * locking strategy, upcall mechanism, internal implementation, etc.
  * The class was motivated by bug 3706:
- *    http://bugzilla.dre.vanderbilt.edu/show_bug.cgi?id=3706
+ *    https://github.com/DOCGroup/bugzilla/issues/3706
  * In short, the Reactor (and potentially other classes) want to refer
  * to timer queues regardless of the implementation internals.
  */

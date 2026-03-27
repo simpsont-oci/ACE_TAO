@@ -5,7 +5,9 @@ USER VISIBLE CHANGES BETWEEN ACE-8.0.5 and ACE-8.0.6
 
 . Don't disable inlining in a debug build with Embarcadero C++ Builder compilers
 
-. Added checks to CDR boolean and boolean array demarshaling 
+. Added checks to CDR boolean and boolean array demarshaling
+
+. All issues from bugzilla.dre.vanderbilt.edu migrated to https://github.com/DOCGroup/bugzilla
 
 USER VISIBLE CHANGES BETWEEN ACE-8.0.4 and ACE-8.0.5
 ====================================================

@@ -138,7 +138,7 @@ public:
    * not work with multiple Leader/Followers sets, consult this bug
    * report for more details:
    *
-   * http://bugzilla.dre.vanderbilt.edu/show_bug.cgi?id=296
+   * https://github.com/DOCGroup/bugzilla/issues/296
    *
    */
   //@{
