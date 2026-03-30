@@ -52,7 +52,7 @@ namespace TAO
 
   private:
     /// Transport this idle timer works on
-    TAO_Transport *transport_; 
+    TAO_Transport *transport_;
   };
 }
 
