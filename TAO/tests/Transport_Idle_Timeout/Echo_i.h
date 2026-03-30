@@ -1,6 +1,3 @@
-// -*- C++ -*-
-// TAO/tests/Idle_Transport_Timeout/Echo_i.h
-
 #ifndef IDLE_TRANSPORT_TIMEOUT_ECHO_I_H
 #define IDLE_TRANSPORT_TIMEOUT_ECHO_I_H
 

@@ -1,6 +1,3 @@
-// -*- IDL -*-
-// TAO/tests/Idle_Transport_Timeout/test.idl
-//
 // Simple interface used by the idle-transport-timeout regression test.
 // The server exposes a single 'ping' operation so the client can
 // establish a real IIOP connection, then go silent and let the idle
