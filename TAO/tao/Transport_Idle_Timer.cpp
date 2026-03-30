@@ -16,7 +16,15 @@ namespace TAO
   int
   Transport_Idle_Timer::handle_timeout (const ACE_Time_Value &current_time, const void* act)
   {
-    return this->transport_->handle_idle_timeout (current_time, act);
+    // Hold a reference to the transport to prevent its destruction, because that would
+    // also destruct this idle timer object
+    this->transport_->add_reference ();
+
+    int const retval = this->transport_->handle_idle_timeout (current_time, act);
+
+    this->transport_->remove_reference ();
+
+    return retval;
   }
 }
 

@@ -989,7 +989,6 @@ TAO_Transport::handle_idle_timeout (const ACE_Time_Value & /* current_time */, c
 
   // Timer has expired, so setting the idle timer id back to -1
   this->idle_timer_id_ = -1;
-  this->add_reference (); // hack
 
   // Confirm transport is still idle under the handler lock to
   // prevent a race with find_idle_transport_i().
@@ -1011,7 +1010,7 @@ TAO_Transport::handle_idle_timeout (const ACE_Time_Value & /* current_time */, c
   // close_connection() is safe to call from the reactor thread.
   (void) this->purge_entry ();
   (void) this->close_connection ();
-  this->remove_reference (); // hack
+
   return 0;
 }
 
