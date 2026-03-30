@@ -1,7 +1,7 @@
 /**
  *  @file    Transport_Idle_Timer.h
  *
- *  Reactor timer that fires when a transport has been idle for the
+ * Reactor timer that fires when a transport has been idle for the
  * configured transport_idl_timeout period and triggers auto-close.
  *
  *  @author  Johnny Willemsen
@@ -44,9 +44,15 @@ namespace TAO
     int handle_timeout (const ACE_Time_Value &current_time,
                         const void *act = nullptr) override;
 
+    Transport_Idle_Timer () = delete;
+    Transport_Idle_Timer (const Transport_Idle_Timer &) = delete;
+    Transport_Idle_Timer &operator= (const Transport_Idle_Timer &) = delete;
+    Transport_Idle_Timer (Transport_Idle_Timer &&) = delete;
+    Transport_Idle_Timer &operator= (Transport_Idle_Timer &&) = delete;
+
   private:
-    // todo, var
-    TAO_Transport *transport_;  ///< Non-owning pointer
+    /// Transport this idle timer works on
+    TAO_Transport *transport_; 
   };
 }
 
@@ -54,4 +60,4 @@ TAO_END_VERSIONED_NAMESPACE_DECL
 
 #include /**/ "ace/post.h"
 
-#endif /* TAO_IDLE_TRANSPORT_TIMER_H */
+#endif /* TAO_TRANSPORT_IDLE_TIMER_H */
