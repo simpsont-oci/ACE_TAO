@@ -14,10 +14,6 @@ module Test
     /// so that a transport is created and placed in the cache.
     string ping (in string msg);
 
-    /// Ask the server to print its current transport-cache size.
-    /// Returns the number of IDLE entries visible to the server ORB.
-    long cache_size ();
-
     /// Orderly shutdown.
     oneway void shutdown ();
   };

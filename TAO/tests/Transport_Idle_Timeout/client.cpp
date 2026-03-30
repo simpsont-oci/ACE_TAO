@@ -41,6 +41,9 @@
 #include "ace/OS_NS_unistd.h"
 #include "ace/Log_Msg.h"
 #include "ace/OS_NS_sys_time.h"
+#include "tao/ORB_Core.h"
+#include "tao/Transport_Cache_Manager_T.h"
+#include "tao/Thread_Lane_Resources.h"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -66,19 +69,27 @@ sleep_with_reactor (CORBA::ORB_ptr orb, int seconds)
 
 /// Verify an expected value and print PASS/FAIL.  Returns false on failure.
 static bool
-check (const char *label, CORBA::Long got, CORBA::Long expected)
+check (const char *label, size_t got, size_t expected)
 {
   if (got == expected)
     {
       ACE_DEBUG ((LM_INFO,
-                  ACE_TEXT ("  [PASS] %C : cache_size = %d (expected %d)\n"),
-                  label, (int)got, (int)expected));
+                  ACE_TEXT ("  [PASS] %C : cache_size = %B (expected %B)\n"),
+                  label, got, expected));
       return true;
     }
   ACE_ERROR ((LM_ERROR,
-              ACE_TEXT ("  [FAIL] %C : cache_size = %d (expected %d)\n"),
-              label, (int)got, (int)expected));
+              ACE_TEXT ("  [FAIL] %C : cache_size = %B (expected %B)\n"),
+              label, got, expected));
   return false;
+}
+
+/// Retrieve the current size of the cache in the client
+size_t
+cache_size(CORBA::ORB_ptr orb)
+{
+  TAO_ORB_Core *core = orb->orb_core ();
+  return core->lane_resources ().transport_cache ().current_size ();
 }
 
 // ---------------------------------------------------------------------------
@@ -136,8 +147,8 @@ tc1_basic_idle_close (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
       return false;
     }
 
-  CORBA::Long sz = echo->cache_size ();
-  ok &= check ("TC-1 after ping (expect 1)", sz, 1);
+  reply = echo->ping ("hello");
+  ok &= check ("TC-1 after ping (expect 1)", cache_size(orb), 1);
 
   // --- Step 2: idle sleep ---
   const int sleep_sec = timeout_sec + 2;
@@ -147,8 +158,7 @@ tc1_basic_idle_close (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
   sleep_with_reactor (orb, sleep_sec);
 
   // --- Step 3: cache must be empty now ---
-  sz = echo->cache_size ();
-  ok &= check ("TC-1 after idle timeout (expect 0)", sz, 0);
+  ok &= check ("TC-1 after idle timeout (expect 0)", cache_size(orb), 0);
 
   return ok;
 }
@@ -161,7 +171,7 @@ tc1_basic_idle_close (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
 //   2. cache_size must be 1 again.
 // ---------------------------------------------------------------------------
 static bool
-tc2_reconnect (CORBA::ORB_ptr /*orb*/, Test::Echo_ptr echo)
+tc2_reconnect (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
 {
   ACE_DEBUG ((LM_INFO, ACE_TEXT ("\n=== TC-2: Reconnect after idle close ===\n")));
   bool ok = true;
@@ -176,8 +186,7 @@ tc2_reconnect (CORBA::ORB_ptr /*orb*/, Test::Echo_ptr echo)
       return false;
     }
 
-  CORBA::Long sz = echo->cache_size ();
-  ok &= check ("TC-2 after reconnect ping (expect 1)", sz, 1);
+  ok &= check ("TC-2 after reconnect ping (expect 1)", cache_size(orb), 1);
 
   return ok;
 }
@@ -190,7 +199,7 @@ tc2_reconnect (CORBA::ORB_ptr /*orb*/, Test::Echo_ptr echo)
 //      (BUSY), cancels the idle timer, then releases back to idle and
 //      reschedules the timer.  No close should occur mid-loop.
 //   2. Sleep (timeout - 1)s — still within the window, cache must be 1.
-//   3. Sleep another 3s — now past the timeout, cache must be 0.
+//   3. Sleep another 4s — now past the timeout, cache must be 0.
 // ---------------------------------------------------------------------------
 static bool
 tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
@@ -213,8 +222,7 @@ tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
 
   // Immediately after the loop the transport returned to idle and the
   // timer was (re)started.  Cache must show 1 entry.
-  CORBA::Long sz = echo->cache_size ();
-  ok &= check ("TC-3 immediately after loop (expect 1)", sz, 1);
+  ok &= check ("TC-3 immediately after loop (expect 1)", cache_size(orb), 1);
 
   // Sleep to just before the expected timeout
   const int pre_sleep = (timeout_sec > 1) ? timeout_sec - 1 : 1;
@@ -222,17 +230,15 @@ tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
               ACE_TEXT ("  sleeping %d s (pre-timeout)...\n"), pre_sleep));
   sleep_with_reactor (orb, pre_sleep);
 
-  sz = echo->cache_size ();
-  ok &= check ("TC-3 before timeout (expect 1)", sz, 1);
+  ok &= check ("TC-3 before timeout (expect 1)", cache_size(orb), 1);
 
   // Sleep past the remainder of the timeout
-  const int post_sleep = 3;
+  const int post_sleep = 4;
   ACE_DEBUG ((LM_INFO,
               ACE_TEXT ("  sleeping %d s (post-timeout)...\n"), post_sleep));
   sleep_with_reactor (orb, post_sleep);
 
-  sz = echo->cache_size ();
-  ok &= check ("TC-3 after timeout (expect 0)", sz, 0);
+  ok &= check ("TC-3 after timeout (expect 0)", cache_size(orb), 0);
 
   return ok;
 }
@@ -257,10 +263,9 @@ tc4_disabled_timeout (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
       return false;
     }
 
-  CORBA::Long sz = echo->cache_size ();
-  ok &= check ("TC-4 after ping (expect 1)", sz, 1);
+  ok &= check ("TC-4 after ping (expect 1)", cache_size(orb), 1);
 
-  // With timeout disabled the connection must survive beyond the default 60 s.
+  // With timeout disabled the connection must never be closed.
   // We use a short wall-clock sleep equal to (timeout_sec + 2) — when
   // run_test.pl invokes TC-4 the server timeout is 0, so the timer never
   // fires regardless.
@@ -270,8 +275,7 @@ tc4_disabled_timeout (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
               sleep_sec));
   sleep_with_reactor (orb, sleep_sec);
 
-  sz = echo->cache_size ();
-  ok &= check ("TC-4 after sleep with timeout=0 (expect 1)", sz, 1);
+  ok &= check ("TC-4 after sleep with timeout=0 (expect 1)", cache_size(orb), 1);
 
   return ok;
 }

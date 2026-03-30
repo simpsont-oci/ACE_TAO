@@ -24,12 +24,6 @@ public:
   // Test::Echo operations
   char *ping (const char *msg) override;
 
-  /// Return the number of transport-cache entries that are currently
-  /// in the ENTRY_IDLE_AND_PURGABLE state.  The test uses this to
-  /// confirm that a transport has been created (cache_size > 0) and
-  /// later that it has been closed by the idle timer (cache_size == 0).
-  CORBA::Long cache_size () override;
-
   void shutdown () override;
 
 private:
