@@ -54,24 +54,32 @@ Echo_i::Echo_i (CORBA::ORB_ptr orb)
 }
 
 bool
-Echo_i::ping (::CORBA::Long sleep_time, ::CORBA::Long cache_size_expected, ::Test::Echo_ptr server, ::CORBA::Long sleep_time_server)
+Echo_i::ping (::CORBA::Long sleep_time, ::CORBA::Long cache_size_expected, ::Test::Echo_ptr server, ::CORBA::Long sleep_time_server, ::CORBA::Long cache_size_expected2)
 {
   if (TAO_debug_level > 0)
     ACE_DEBUG ((LM_DEBUG,
-                ACE_TEXT ("Echo_i::ping, sleep time (%d), cache size expected (%d)\n"), sleep_time, cache_size_expected));
+                ACE_TEXT ("(%P|%t) Echo_i::ping, sleep time (%d), cache size expected (%d)\n"), sleep_time, cache_size_expected));
 
+  bool ok = true;
   sleep_with_reactor (this->orb_, sleep_time);
 
   if (!CORBA::is_nil(server))
   {
-    server->ping(sleep_time, 0, Test::Echo::_nil(), 0);
+    if (TAO_debug_level > 0)
+      ACE_DEBUG ((LM_DEBUG,
+                  ACE_TEXT ("(%P|%t) Echo_i::ping, pinging second server\n")));
+    ok &= server->ping (sleep_time_server, 1, Test::Echo::_nil(), 0, 1);
     if (sleep_time_server > 0)
       {
         sleep_with_reactor (this->orb_, sleep_time_server);
       }
+    ok &= check ("ping", cache_size(this->orb_), cache_size_expected2);
   }
-
-  return check ("ping", cache_size(this->orb_), cache_size_expected);
+  else
+  {
+    ok &= check ("ping", cache_size(this->orb_), cache_size_expected);
+  }
+  return ok;
 }
 
 void

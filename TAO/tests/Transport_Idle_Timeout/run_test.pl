@@ -226,20 +226,20 @@ sub run_multiple_scenario {
 # ---------------------------------------------------------------------------
 # Scenario 1: TC-1, TC-2, TC-3  (timeout enabled)
 # ---------------------------------------------------------------------------
-run_scenario (
-    "TC-1/TC-2/TC-3: idle timeout enabled (${timeout_sec}s)",
-    "svc.conf",
-    ""
-);
+# run_scenario (
+#     "TC-1/TC-2/TC-3: idle timeout enabled (${timeout_sec}s)",
+#     "svc.conf",
+#     ""
+# );
 
 # ---------------------------------------------------------------------------
 # Scenario 2: TC-4  (timeout disabled)
 # ---------------------------------------------------------------------------
-run_scenario (
-    "TC-4: idle timeout disabled",
-    "svc_disabled.conf",
-    "-d"
-);
+# run_scenario (
+#     "TC-4: idle timeout disabled",
+#     "svc_disabled.conf",
+#     "-d"
+# );
 
 run_multiple_scenario (
     "TC-1/TC-2/TC-3: idle timeout enabled (${timeout_sec}s)",

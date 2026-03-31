@@ -133,13 +133,13 @@ parse_args (int argc, ACE_TCHAR *argv[])
 //   3. cache_size must be 0 -> transport closed by timer.
 // ---------------------------------------------------------------------------
 static bool
-tc1_basic_idle_close (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_ptr echo2)
+tc1_basic_idle_close (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
 {
   ACE_DEBUG ((LM_INFO, ACE_TEXT ("\n=== TC-1: Basic idle close ===\n")));
   bool ok = true;
 
   // --- Step 1: establish a transport ---
-  ok &= echo->ping (0, 1, echo2, 0);
+  ok &= echo->ping (0, 1, Test::Echo::_nil (), 0, 0);
 
   ok &= check ("TC-1 after ping (expect 1)", cache_size(orb), 1);
 
@@ -164,14 +164,14 @@ tc1_basic_idle_close (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_ptr ec
 //   2. cache_size must be 1 again.
 // ---------------------------------------------------------------------------
 static bool
-tc2_reconnect (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_ptr echo2)
+tc2_reconnect (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
 {
   ACE_DEBUG ((LM_INFO, ACE_TEXT ("\n=== TC-2: Reconnect after idle close ===\n")));
   bool ok = true;
 
   // A new ping must succeed without TRANSIENT even though TC-1 caused the
   // server to close the connection.  TAO's reconnect logic handles this.
-  ok &= echo->ping (0, 1, echo2, 0);
+  ok &= echo->ping (0, 1, Test::Echo::_nil (), 0, 0);
 
   ok &= check ("TC-2 after reconnect ping (expect 1)", cache_size(orb), 1);
 
@@ -189,7 +189,7 @@ tc2_reconnect (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_ptr echo2)
 //   3. Sleep another 4s — now past the timeout, cache must be 0.
 // ---------------------------------------------------------------------------
 static bool
-tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_ptr echo2)
+tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
 {
   ACE_DEBUG ((LM_INFO,
               ACE_TEXT ("\n=== TC-3: Timer cancellation on reuse (%d pings) ===\n"),
@@ -199,7 +199,7 @@ tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_p
   // Rapid-fire loop — transport reused each time
   for (int i = 0; i < loop_count; ++i)
     {
-      ok &= echo->ping (0, 1, echo2, 0);
+      ok &= echo->ping (0, 1, Test::Echo::_nil (), 0, 0);
     }
 
   // Immediately after the loop the transport returned to idle and the
@@ -233,12 +233,12 @@ tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_p
 // be present (i.e. not closed).
 // ---------------------------------------------------------------------------
 static bool
-tc4_disabled_timeout (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_ptr echo2)
+tc4_disabled_timeout (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
 {
   ACE_DEBUG ((LM_INFO, ACE_TEXT ("\n=== TC-4: Disabled timeout ===\n")));
   bool ok = true;
 
-  ok &= echo->ping (0, 1, echo2, 0);
+  ok &= echo->ping (0, 1, Test::Echo::_nil (), 0, 0);
 
   ok &= check ("TC-4 after ping (expect 1)", cache_size(orb), 1);
 
@@ -273,7 +273,6 @@ ACE_TMAIN (int argc, ACE_TCHAR *argv[])
 
       CORBA::Object_var obj = orb->string_to_object (ior);
       Test::Echo_var echo = Test::Echo::_narrow (obj.in ());
-      Test::Echo_var echo2;
 
       if (CORBA::is_nil (echo.in ()))
         ACE_ERROR_RETURN ((LM_ERROR,
@@ -284,14 +283,14 @@ ACE_TMAIN (int argc, ACE_TCHAR *argv[])
       if (disabled_tc)
         {
           // TC-4 only — server was started without idle timeout
-          all_pass &= tc4_disabled_timeout (orb.in (), echo.in (), echo2.in ());
+          all_pass &= tc4_disabled_timeout (orb.in (), echo.in ());
         }
       else
         {
           // TC-1, TC-2, TC-3 in sequence
-          all_pass &= tc1_basic_idle_close (orb.in (), echo.in (), echo2.in ());
-          all_pass &= tc2_reconnect        (orb.in (), echo.in (), echo2.in ());
-          all_pass &= tc3_timer_cancel_on_reuse (orb.in (), echo.in (), echo2.in ());
+          all_pass &= tc1_basic_idle_close (orb.in (), echo.in ());
+          all_pass &= tc2_reconnect        (orb.in (), echo.in ());
+          all_pass &= tc3_timer_cancel_on_reuse (orb.in (), echo.in ());
         }
 
       // Shut down the server
