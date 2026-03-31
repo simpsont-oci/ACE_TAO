@@ -511,8 +511,7 @@ namespace TAO
 
   template <typename TT, typename TRDT, typename PSTRAT>
   bool
-  Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::
-    is_entry_connecting_i (const HASH_MAP_ENTRY &entry)
+  Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::is_entry_connecting_i (const HASH_MAP_ENTRY &entry)
   {
     Cache_Entries_State entry_state = entry.int_id_.recycle_state ();
     bool result = (entry_state == ENTRY_CONNECTING);
@@ -540,8 +539,7 @@ namespace TAO
 #if !defined (ACE_LACKS_QSORT)
   template <typename TT, typename TRDT, typename PSTRAT>
   int
-  Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::
-    cpscmp(const void* a, const void* b)
+  Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::cpscmp(const void* a, const void* b)
   {
     const HASH_MAP_ENTRY** left  = (const HASH_MAP_ENTRY**) const_cast<void *> (a);
     const HASH_MAP_ENTRY** right = (const HASH_MAP_ENTRY**) const_cast<void *> (b);
@@ -568,7 +566,7 @@ namespace TAO
     {
       ACE_MT (ACE_GUARD_RETURN (ACE_Lock, ace_mon, *this->cache_lock_, 0));
 
-      DESCRIPTOR_SET sorted_set = 0;
+      DESCRIPTOR_SET sorted_set = nullptr;
       int const sorted_size = this->fill_set_i (sorted_set);
 
       // Only call close_entries () if sorted_set != 0.  It takes
@@ -597,8 +595,7 @@ namespace TAO
             {
               if (this->is_entry_purgable_i (*sorted_set[i]))
                 {
-                  transport_type* transport =
-                    sorted_set[i]->int_id_.transport ();
+                  transport_type* transport = sorted_set[i]->int_id_.transport ();
                   sorted_set[i]->int_id_.recycle_state (ENTRY_BUSY);
                   transport->add_reference ();
 
@@ -631,13 +628,13 @@ namespace TAO
             }
 
           delete [] sorted_set;
-          sorted_set = 0;
+          sorted_set = nullptr;
           // END FORMER close_entries
         }
     }
 
     // Now, without the lock held, lets go through and close all the transports.
-    if (! transports_to_be_closed.is_empty ())
+    if (!transports_to_be_closed.is_empty ())
       {
         typename transport_set_type::iterator it (transports_to_be_closed);
         while (! it.done ())
