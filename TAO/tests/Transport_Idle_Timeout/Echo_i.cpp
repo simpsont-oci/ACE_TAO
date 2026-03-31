@@ -54,13 +54,21 @@ Echo_i::Echo_i (CORBA::ORB_ptr orb)
 }
 
 bool
-Echo_i::ping (::CORBA::Long sleep_time, ::CORBA::Long cache_size_expected)
+Echo_i::ping (::CORBA::Long sleep_time, ::CORBA::Long cache_size_expected, ::Test::Echo_ptr server, ::CORBA::Long sleep_time_server)
 {
   if (TAO_debug_level > 0)
     ACE_DEBUG ((LM_DEBUG,
                 ACE_TEXT ("Echo_i::ping, sleep time (%d), cache size expected (%d)\n"), sleep_time, cache_size_expected));
 
   sleep_with_reactor (this->orb_, sleep_time);
+
+  if (!CORBA::is_nil(server))
+  {
+    if (sleep_time_server > 0)
+      {
+        sleep_with_reactor (this->orb_, sleep_time_server);
+      }
+  }
 
   return check ("ping", cache_size(this->orb_), cache_size_expected);
 }

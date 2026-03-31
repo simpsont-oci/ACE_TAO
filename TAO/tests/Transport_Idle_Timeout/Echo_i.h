@@ -19,7 +19,7 @@ public:
   explicit Echo_i (CORBA::ORB_ptr orb);
 
   // Test::Echo operations
-  bool ping (::CORBA::Long sleep_time, ::CORBA::Long cache_size_expected) override;
+  bool ping (::CORBA::Long sleep_time, ::CORBA::Long cache_size_expected, ::Test::Echo_ptr server, ::CORBA::Long sleep_time_server) override;
 
   void shutdown () override;
 
