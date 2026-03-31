@@ -64,6 +64,7 @@ Echo_i::ping (::CORBA::Long sleep_time, ::CORBA::Long cache_size_expected, ::Tes
 
   if (!CORBA::is_nil(server))
   {
+    server->ping(sleep_time, 0, Test::Echo::_nil(), 0);
     if (sleep_time_server > 0)
       {
         sleep_with_reactor (this->orb_, sleep_time_server);

@@ -97,6 +97,7 @@ cache_size(CORBA::ORB_ptr orb)
 // ---------------------------------------------------------------------------
 
 static const char *ior          = nullptr;
+static const char *ior2         = nullptr;
 static int         timeout_sec  = 3;    // must match server svc.conf value
 static int         loop_count   = 10;
 static bool        disabled_tc  = false;
@@ -110,12 +111,13 @@ parse_args (int argc, ACE_TCHAR *argv[])
     switch (c)
       {
       case 'k':  ior         = get_opts.opt_arg ();           break;
+      case 'l':  ior2        = get_opts.opt_arg ();           break;
       case 't':  timeout_sec = ACE_OS::atoi (get_opts.opt_arg ()); break;
       case 'n':  loop_count  = ACE_OS::atoi (get_opts.opt_arg ()); break;
       case 'd':  disabled_tc = true;                           break;
       default:
         ACE_ERROR_RETURN ((LM_ERROR,
-            ACE_TEXT ("Usage: client -k <ior> [-t <sec>] [-n <N>] [-d]\n")),
+            ACE_TEXT ("Usage: client -k <ior> [-l <ior>] [-t <sec>] [-n <N>] [-d]\n")),
             -1);
       }
   if (ior == nullptr)
@@ -272,8 +274,14 @@ ACE_TMAIN (int argc, ACE_TCHAR *argv[])
         return 1;
 
       CORBA::Object_var obj = orb->string_to_object (ior);
+      CORBA::Object_var obj2;
+      if (ior2)
+        {
+          ACE_DEBUG ((LM_INFO, ACE_TEXT ("Client received echo2\n")));
+          obj2 = orb->string_to_object (ior2);
+        }
       Test::Echo_var echo = Test::Echo::_narrow (obj.in ());
-      Test::Echo_var echo2;
+      Test::Echo_var echo2 = Test::Echo::_narrow (obj2.in ());;
 
       if (CORBA::is_nil (echo.in ()))
         ACE_ERROR_RETURN ((LM_ERROR,
@@ -297,6 +305,11 @@ ACE_TMAIN (int argc, ACE_TCHAR *argv[])
       // Shut down the server
       ACE_DEBUG ((LM_INFO, ACE_TEXT ("Shutting down echo\n")));
       echo->shutdown ();
+      if (!CORBA::is_nil (echo2.in ()))
+        {
+          ACE_DEBUG ((LM_INFO, ACE_TEXT ("Shutting down echo2\n")));
+          echo2->shutdown ();
+        }
 
       orb->destroy ();
 

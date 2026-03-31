@@ -30,3 +30,15 @@ project(*client): taoclient {
     testC.h
   }
 }
+
+project(*client_multiple): taoclient {
+  exename = client_multiple
+  after += *idl
+  Source_Files {
+    client_multiple.cpp
+    testC.cpp
+  }
+  Header_Files {
+    testC.h
+  }
+}
