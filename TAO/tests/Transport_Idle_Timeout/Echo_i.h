@@ -19,7 +19,7 @@ public:
   explicit Echo_i (CORBA::ORB_ptr orb);
 
   // Test::Echo operations
-  char *ping (const char *msg) override;
+  void ping (::CORBA::Long sleep_time, ::CORBA::Long cache_size_expected) override;
 
   void shutdown () override;
 

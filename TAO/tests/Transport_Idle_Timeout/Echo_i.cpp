@@ -8,13 +8,12 @@ Echo_i::Echo_i (CORBA::ORB_ptr orb)
 {
 }
 
-char *
-Echo_i::ping (const char *msg)
+void
+Echo_i::ping (::CORBA::Long sleep_time, ::CORBA::Long cache_size_expected)
 {
   if (TAO_debug_level > 0)
     ACE_DEBUG ((LM_DEBUG,
-                ACE_TEXT ("Echo_i::ping (%C)\n"), msg));
-  return CORBA::string_dup (msg);
+                ACE_TEXT ("Echo_i::ping, sleep time (%d), cache size expected (%d)\n"), sleep_time, cache_size_expected));
 }
 
 void

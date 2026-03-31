@@ -139,19 +139,12 @@ tc1_basic_idle_close (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
   bool ok = true;
 
   // --- Step 1: establish a transport ---
-  CORBA::String_var reply = echo->ping ("hello");
+  echo->ping (0, 1);
 
-  if (ACE_OS::strcmp (reply.in (), "hello") != 0)
-    {
-      ACE_ERROR ((LM_ERROR, ACE_TEXT ("  [FAIL] TC-1 ping returned wrong value\n")));
-      return false;
-    }
-
-  reply = echo->ping ("hello");
   ok &= check ("TC-1 after ping (expect 1)", cache_size(orb), 1);
 
   // --- Step 2: idle sleep ---
-  const int sleep_sec = timeout_sec + 2;
+  int const sleep_sec = timeout_sec + 2;
   ACE_DEBUG ((LM_INFO,
               ACE_TEXT ("  sleeping %d s for idle timer to fire...\n"),
               sleep_sec));
@@ -178,13 +171,7 @@ tc2_reconnect (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
 
   // A new ping must succeed without TRANSIENT even though TC-1 caused the
   // server to close the connection.  TAO's reconnect logic handles this.
-  CORBA::String_var reply = echo->ping ("reconnect");
-
-  if (ACE_OS::strcmp (reply.in (), "reconnect") != 0)
-    {
-      ACE_ERROR ((LM_ERROR, ACE_TEXT ("  [FAIL] TC-2 ping returned wrong value\n")));
-      return false;
-    }
+  echo->ping (0, 1);
 
   ok &= check ("TC-2 after reconnect ping (expect 1)", cache_size(orb), 1);
 
@@ -212,12 +199,7 @@ tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
   // Rapid-fire loop — transport reused each time
   for (int i = 0; i < loop_count; ++i)
     {
-      CORBA::String_var reply = echo->ping ("loop");
-      if (ACE_OS::strcmp (reply.in (), "loop") != 0)
-        {
-          ACE_ERROR ((LM_ERROR, ACE_TEXT ("  [FAIL] TC-3 ping %d bad reply\n"), i));
-          ok = false;
-        }
+      echo->ping (0, 1);
     }
 
   // Immediately after the loop the transport returned to idle and the
@@ -225,7 +207,7 @@ tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
   ok &= check ("TC-3 immediately after loop (expect 1)", cache_size(orb), 1);
 
   // Sleep to just before the expected timeout
-  const int pre_sleep = (timeout_sec > 1) ? timeout_sec - 1 : 1;
+  int const pre_sleep = (timeout_sec > 1) ? timeout_sec - 1 : 1;
   ACE_DEBUG ((LM_INFO,
               ACE_TEXT ("  sleeping %d s (pre-timeout)...\n"), pre_sleep));
   sleep_with_reactor (orb, pre_sleep);
@@ -233,7 +215,7 @@ tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
   ok &= check ("TC-3 before timeout (expect 1)", cache_size(orb), 1);
 
   // Sleep past the remainder of the timeout
-  const int post_sleep = 4;
+  int constexpr post_sleep = 4;
   ACE_DEBUG ((LM_INFO,
               ACE_TEXT ("  sleeping %d s (post-timeout)...\n"), post_sleep));
   sleep_with_reactor (orb, post_sleep);
@@ -256,12 +238,7 @@ tc4_disabled_timeout (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
   ACE_DEBUG ((LM_INFO, ACE_TEXT ("\n=== TC-4: Disabled timeout ===\n")));
   bool ok = true;
 
-  CORBA::String_var reply = echo->ping ("disabled");
-  if (ACE_OS::strcmp (reply.in (), "disabled") != 0)
-    {
-      ACE_ERROR ((LM_ERROR, ACE_TEXT ("  [FAIL] TC-4 ping bad reply\n")));
-      return false;
-    }
+  echo->ping (0, 1);
 
   ok &= check ("TC-4 after ping (expect 1)", cache_size(orb), 1);
 
