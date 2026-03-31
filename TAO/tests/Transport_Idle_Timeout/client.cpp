@@ -54,7 +54,7 @@
 /// We cannot use ACE_OS::sleep() alone because in a single-process test
 /// harness the reactor runs in the same thread.  For a two-process test
 /// the sleep is fine; for safety we drain reactor events anyway.
-static void
+void
 sleep_with_reactor (CORBA::ORB_ptr orb, int seconds)
 {
   ACE_Time_Value deadline =
@@ -68,7 +68,7 @@ sleep_with_reactor (CORBA::ORB_ptr orb, int seconds)
 }
 
 /// Verify an expected value and print PASS/FAIL.  Returns false on failure.
-static bool
+bool
 check (const char *label, size_t got, size_t expected)
 {
   if (got == expected)
@@ -139,7 +139,7 @@ tc1_basic_idle_close (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
   bool ok = true;
 
   // --- Step 1: establish a transport ---
-  echo->ping (0, 1);
+  ok &= echo->ping (0, 1);
 
   ok &= check ("TC-1 after ping (expect 1)", cache_size(orb), 1);
 
@@ -171,7 +171,7 @@ tc2_reconnect (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
 
   // A new ping must succeed without TRANSIENT even though TC-1 caused the
   // server to close the connection.  TAO's reconnect logic handles this.
-  echo->ping (0, 1);
+  ok &= echo->ping (0, 1);
 
   ok &= check ("TC-2 after reconnect ping (expect 1)", cache_size(orb), 1);
 
@@ -199,7 +199,7 @@ tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
   // Rapid-fire loop — transport reused each time
   for (int i = 0; i < loop_count; ++i)
     {
-      echo->ping (0, 1);
+      ok &= echo->ping (0, 1);
     }
 
   // Immediately after the loop the transport returned to idle and the
@@ -238,7 +238,7 @@ tc4_disabled_timeout (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
   ACE_DEBUG ((LM_INFO, ACE_TEXT ("\n=== TC-4: Disabled timeout ===\n")));
   bool ok = true;
 
-  echo->ping (0, 1);
+  ok &= echo->ping (0, 1);
 
   ok &= check ("TC-4 after ping (expect 1)", cache_size(orb), 1);
 
