@@ -73,7 +73,7 @@ Echo_i::ping (::CORBA::Long sleep_time, ::CORBA::Long cache_size_expected, ::Tes
       {
         sleep_with_reactor (this->orb_, sleep_time_server);
       }
-    ok &= check ("ping", cache_size(this->orb_), cache_size_expected2);
+    ok &= check ("ping_second", cache_size(this->orb_), cache_size_expected2);
   }
   else
   {

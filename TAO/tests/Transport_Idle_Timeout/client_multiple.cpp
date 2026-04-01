@@ -160,7 +160,9 @@ tc1_basic_idle_close (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_ptr ec
   // Make another call, but let wait sleep_sec after the ping to the second server,
   // which means the call takes longer as the idle time.
   // at that moment the cache should be 1, this means the call takes longer as the idle time,
-  ok &= echo->ping (0, 2, echo2, sleep_sec, 0);
+  ok &= echo->ping (0, 2, echo2, sleep_sec, 1);
+
+  ok &= check ("TC-1 after ping longer as timeout (expect 1)", cache_size(orb), 1);
 
   return ok;
 }
