@@ -572,6 +572,14 @@ TAO_Transport::make_idle ()
 int
 TAO_Transport::update_transport ()
 {
+  if (TAO_debug_level > 3)
+    {
+      TAOLIB_DEBUG ((LM_DEBUG,
+                  ACE_TEXT ("TAO (%P|%t) - Transport[%d]::update_transport\n"),
+                  this->id ()));
+    }
+
+  // @todo jwi timer update????
   return this->transport_cache_manager ().update_entry (this->cache_map_entry_);
 }
 
@@ -994,16 +1002,16 @@ TAO_Transport::handle_idle_timeout (const ACE_Time_Value & /* current_time */, c
   // prevent a race with find_idle_transport_i().
   {
     ACE_GUARD_RETURN (ACE_Lock, mon, *this->handler_lock_, 0);
-    if (!this->transport_cache_manager ().is_idle (this->cache_map_entry_))
-    {
+    if (!this->transport_cache_manager ().is_entry_purgable (this->cache_map_entry_))
+      {
         if (TAO_debug_level > 0)
-        TAOLIB_DEBUG ((LM_DEBUG,
-            ACE_TEXT ("TAO (%P|%t) - Transport[%d]::handle_idle_timeout, ")
-            ACE_TEXT ("idle_timeout, transport is not idle, don't close it\n"),
-            this->id ()));
+          TAOLIB_DEBUG ((LM_DEBUG,
+              ACE_TEXT ("TAO (%P|%t) - Transport[%d]::handle_idle_timeout, ")
+              ACE_TEXT ("idle_timeout, transport is not purgable, don't close it\n"),
+              this->id ()));
 
-      return 0;  // Raced — transport is busy now; leave it open
-    }
+        return 0;  // Raced — transport is busy now; leave it open
+      }
   }
 
   // Purge from cache then close the underlying socket.
@@ -2860,8 +2868,7 @@ TAO_Transport::post_open (size_t id)
                             ACE_TEXT (", cache_map_entry_ is [%@]\n"), this->id_, this->cache_map_entry_));
     }
 
-  this->transport_cache_manager ().mark_connected (this->cache_map_entry_,
-                                                   true);
+  this->transport_cache_manager ().mark_connected (this->cache_map_entry_, true);
 
   // update transport cache to make this entry available
   this->transport_cache_manager ().set_entry_state (this->cache_map_entry_, TAO::ENTRY_IDLE_AND_PURGABLE);
@@ -2934,17 +2941,30 @@ TAO_Transport::schedule_idle_timer ()
   int const timeout_sec = this->orb_core_->resource_factory ()->transport_idle_timeout ();
   if (timeout_sec > 0)
     {
-      ACE_Reactor *reactor = this->orb_core_->reactor ();
-      const ACE_Time_Value tv (static_cast<time_t> (timeout_sec));
-      this->idle_timer_id_= reactor->schedule_timer (std::addressof(this->transport_idle_timer_), nullptr, tv);
-
-      if (TAO_debug_level > 6)
+      if (this->transport_cache_manager ().is_entry_purgable (this->cache_map_entry_))
         {
-          TAOLIB_ERROR ((LM_ERROR,
-                  ACE_TEXT ("TAO (%P|%t) - Transport[%d]::schedule_idle_timer , ")
-                  ACE_TEXT ("schedule idle timer with id [%d] ")
-                  ACE_TEXT ("in the reactor.\n"),
-                  this->id (), this->idle_timer_id_));
+          ACE_Reactor *reactor = this->orb_core_->reactor ();
+          const ACE_Time_Value tv (static_cast<time_t> (timeout_sec));
+          this->idle_timer_id_= reactor->schedule_timer (std::addressof(this->transport_idle_timer_), nullptr, tv);
+
+          if (TAO_debug_level > 6)
+            {
+              TAOLIB_DEBUG ((LM_DEBUG,
+                      ACE_TEXT ("TAO (%P|%t) - Transport[%d]::schedule_idle_timer, ")
+                      ACE_TEXT ("schedule idle timer with id [%d] ")
+                      ACE_TEXT ("in the reactor.\n"),
+                      this->id (), this->idle_timer_id_));
+            }
+        }
+      else
+        {
+          if (TAO_debug_level > 8)
+            {
+              TAOLIB_DEBUG ((LM_DEBUG,
+                      ACE_TEXT ("TAO (%P|%t) - Transport[%d]::schedule_idle_timer, ")
+                      ACE_TEXT ("not scheduled idle timer because transport is not purgable\n"),
+                      this->id ()));
+            }
         }
     }
 }
@@ -2959,7 +2979,7 @@ TAO_Transport::cancel_idle_timer ()
         {
           if (TAO_debug_level > 6)
             {
-              TAOLIB_ERROR ((LM_ERROR,
+              TAOLIB_DEBUG ((LM_DEBUG,
                       ACE_TEXT ("TAO (%P|%t) - Transport[%d]::cancel_idle_timer, ")
                       ACE_TEXT ("cancel idle timer with id [%d] ")
                       ACE_TEXT ("from the reactor.\n"),

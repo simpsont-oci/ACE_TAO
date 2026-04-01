@@ -169,6 +169,11 @@ namespace TAO
     /// Return the underlying cache map
     HASH_MAP &map ();
 
+    /**
+     * Tries to find if the @c int_id_ in @a entry is purgable
+     */
+    bool is_entry_purgable (HASH_MAP_ENTRY* entry);
+
   private:
     /// Lookup entry<key,value> in the cache. Grabs the lock and calls the
     /// implementation function find_i.

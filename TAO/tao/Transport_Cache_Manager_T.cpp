@@ -380,6 +380,20 @@ namespace TAO
   }
 
   template <typename TT, typename TRDT, typename PSTRAT>
+  bool
+  Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::is_entry_purgable (HASH_MAP_ENTRY *entry)
+  {
+    ACE_MT (ACE_GUARD_RETURN (ACE_Lock,
+                              guard,
+                              *this->cache_lock_, false));
+
+    if (entry == nullptr)
+      return false;
+
+    return this->is_entry_purgable_i (*entry);
+  }
+
+  template <typename TT, typename TRDT, typename PSTRAT>
   int
   Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::update_entry (HASH_MAP_ENTRY *&entry)
   {
