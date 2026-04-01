@@ -998,7 +998,7 @@ TAO_Transport::handle_idle_timeout (const ACE_Time_Value & /* current_time */, c
   // Timer has expired, so setting the idle timer id back to -1
   this->idle_timer_id_ = -1;
 
-  // Confirm transport is still idle under the handler lock to
+  // Confirm transport is purgable under the handler lock to
   // prevent a race with find_idle_transport_i().
   {
     ACE_GUARD_RETURN (ACE_Lock, mon, *this->handler_lock_, 0);
@@ -1007,10 +1007,12 @@ TAO_Transport::handle_idle_timeout (const ACE_Time_Value & /* current_time */, c
         if (TAO_debug_level > 0)
           TAOLIB_DEBUG ((LM_DEBUG,
               ACE_TEXT ("TAO (%P|%t) - Transport[%d]::handle_idle_timeout, ")
-              ACE_TEXT ("idle_timeout, transport is not purgable, don't close it\n"),
+              ACE_TEXT ("idle_timeout, transport is not purgable, don't close it, reschedule it\n"),
               this->id ()));
 
-        return 0;  // Raced — transport is busy now; leave it open
+        this->schedule_idle_timer ();
+
+        return 0;
       }
   }
 
@@ -2941,30 +2943,17 @@ TAO_Transport::schedule_idle_timer ()
   int const timeout_sec = this->orb_core_->resource_factory ()->transport_idle_timeout ();
   if (timeout_sec > 0)
     {
-      if (this->transport_cache_manager ().is_entry_purgable (this->cache_map_entry_))
-        {
-          ACE_Reactor *reactor = this->orb_core_->reactor ();
-          const ACE_Time_Value tv (static_cast<time_t> (timeout_sec));
-          this->idle_timer_id_= reactor->schedule_timer (std::addressof(this->transport_idle_timer_), nullptr, tv);
+      ACE_Reactor *reactor = this->orb_core_->reactor ();
+      const ACE_Time_Value tv (static_cast<time_t> (timeout_sec));
+      this->idle_timer_id_= reactor->schedule_timer (std::addressof(this->transport_idle_timer_), nullptr, tv);
 
-          if (TAO_debug_level > 6)
-            {
-              TAOLIB_DEBUG ((LM_DEBUG,
-                      ACE_TEXT ("TAO (%P|%t) - Transport[%d]::schedule_idle_timer, ")
-                      ACE_TEXT ("schedule idle timer with id [%d] ")
-                      ACE_TEXT ("in the reactor.\n"),
-                      this->id (), this->idle_timer_id_));
-            }
-        }
-      else
+      if (TAO_debug_level > 6)
         {
-          if (TAO_debug_level > 8)
-            {
-              TAOLIB_DEBUG ((LM_DEBUG,
-                      ACE_TEXT ("TAO (%P|%t) - Transport[%d]::schedule_idle_timer, ")
-                      ACE_TEXT ("not scheduled idle timer because transport is not purgable\n"),
-                      this->id ()));
-            }
+          TAOLIB_DEBUG ((LM_DEBUG,
+                  ACE_TEXT ("TAO (%P|%t) - Transport[%d]::schedule_idle_timer, ")
+                  ACE_TEXT ("schedule idle timer with id [%d] ")
+                  ACE_TEXT ("in the reactor.\n"),
+                  this->id (), this->idle_timer_id_));
         }
     }
 }
