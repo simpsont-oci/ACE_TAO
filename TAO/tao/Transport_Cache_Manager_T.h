@@ -127,6 +127,9 @@ namespace TAO
     /// Purge the entry from the Cache Map
     int purge_entry (HASH_MAP_ENTRY *& entry);
 
+    /// Purge the entry from the Cache Map only when the entry is purgable
+    int purge_entry_when_purgable (HASH_MAP_ENTRY *& entry);
+
     /// Mark the entry as connected.
     void mark_connected (HASH_MAP_ENTRY *& entry, bool state);
 
@@ -168,11 +171,6 @@ namespace TAO
 
     /// Return the underlying cache map
     HASH_MAP &map ();
-
-    /**
-     * Tries to find if the @c int_id_ in @a entry is purgable
-     */
-    bool is_entry_purgable (HASH_MAP_ENTRY* entry);
 
   private:
     /// Lookup entry<key,value> in the cache. Grabs the lock and calls the

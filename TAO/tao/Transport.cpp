@@ -187,6 +187,8 @@ TAO_Transport::~TAO_Transport ()
                   this->id_));
     }
 
+  this->cancel_idle_timer ();
+
   delete this->messaging_object_;
 
   delete this->ws_;
@@ -998,28 +1000,28 @@ TAO_Transport::handle_idle_timeout (const ACE_Time_Value & /* current_time */, c
   // Timer has expired, so setting the idle timer id back to -1
   this->idle_timer_id_ = -1;
 
-  // Confirm transport is purgable under the handler lock to
-  // prevent a race with find_idle_transport_i().
-  {
-    ACE_GUARD_RETURN (ACE_Lock, mon, *this->handler_lock_, 0);
-    if (!this->transport_cache_manager ().is_entry_purgable (this->cache_map_entry_))
-      {
-        if (TAO_debug_level > 0)
-          TAOLIB_DEBUG ((LM_DEBUG,
-              ACE_TEXT ("TAO (%P|%t) - Transport[%d]::handle_idle_timeout, ")
-              ACE_TEXT ("idle_timeout, transport is not purgable, don't close it, reschedule it\n"),
-              this->id ()));
+  if (this->transport_cache_manager ().purge_entry_when_purgable (this->cache_map_entry_) == -1)
+    {
+      if (TAO_debug_level > 6)
+        TAOLIB_DEBUG ((LM_DEBUG,
+            ACE_TEXT ("TAO (%P|%t) - Transport[%d]::handle_idle_timeout, ")
+            ACE_TEXT ("idle_timeout, transport is not purgable, don't close it, reschedule it\n"),
+            this->id ()));
 
-        this->schedule_idle_timer ();
+      this->schedule_idle_timer ();
+    }
+  else
+    {
+      if (TAO_debug_level > 6)
+        TAOLIB_DEBUG ((LM_DEBUG,
+            ACE_TEXT ("TAO (%P|%t) - Transport[%d]::handle_idle_timeout, ")
+            ACE_TEXT ("idle_timeout, transport purged due to idle timeout\n"),
+            this->id ()));
 
-        return 0;
-      }
-  }
-
-  // Purge from cache then close the underlying socket.
-  // close_connection() is safe to call from the reactor thread.
-  (void) this->purge_entry ();
-  (void) this->close_connection ();
+      // Close the underlying socket.
+      // close_connection() is safe to call from the reactor thread.
+      (void) this->close_connection ();
+    }
 
   return 0;
 }
