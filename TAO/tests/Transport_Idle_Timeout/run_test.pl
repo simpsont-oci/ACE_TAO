@@ -90,20 +90,20 @@ sub run_scenario {
                                             + $client_budget);
     if ($client_status != 0) {
         print STDERR "ERROR: client returned $client_status\n";
-        return 1;
+        $status = 1;
     }
 
     # Wait for server to exit (it calls orb->shutdown() on receiving shutdown())
     my $server_exit = $SV->WaitKill ($server->ProcessStopWaitInterval ());
     if ($server_exit != 0) {
         print STDERR "ERROR: server returned $server_exit\n";
-        return 1;
+        $status = 1;
     }
 
     $server->DeleteFile ($ior_file1);
     $client->DeleteFile ($ior_file1);
 
-    return 1;
+    return $status;
 }
 
 sub run_multiple_scenario {
@@ -199,20 +199,20 @@ sub run_multiple_scenario {
                                             + $client_budget);
     if ($client_status != 0) {
         print STDERR "ERROR: client returned $client_status\n";
-        return 1;
+        $status = 1;
     }
 
     # Wait for server 1 to exit (it calls orb->shutdown() on receiving shutdown())
     my $server_exit1 = $SV1->WaitKill ($server1->ProcessStopWaitInterval ());
     if ($server_exit1 != 0) {
         print STDERR "ERROR: server1 returned $server_exit1\n";
-        return 1;
+        $status = 1;
     }
     # Wait for server 2 to exit (it calls orb->shutdown() on receiving shutdown())
     my $server_exit2 = $SV2->WaitKill ($server2->ProcessStopWaitInterval ());
     if ($server_exit2 != 0) {
         print STDERR "ERROR: server2 returned $server_exit2\n";
-        return 1;
+        $status = 1;
     }
 
     $server1->DeleteFile ($ior_file1);
@@ -220,7 +220,7 @@ sub run_multiple_scenario {
     $client->DeleteFile ($ior_file1);
     $client->DeleteFile ($ior_file2);
 
-    return 1;
+    return $status;
 }
 
 # ---------------------------------------------------------------------------
