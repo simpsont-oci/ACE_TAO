@@ -301,14 +301,11 @@ protected:
   virtual int post_wakeup_completions (int how_many);
 
 protected:
-  /// Handler to handle the wakeups. This works in conjunction with the
-  /// <ACE_Proactor::run_event_loop>.
-  ACE_Handler wakeup_handler_;
   int os_id_;
 
 private:
   /// Task to process pseudo-asynchronous accept/connect
-  ACE_Asynch_Pseudo_Task  pseudo_task_;
+  ACE_Asynch_Pseudo_Task *pseudo_task_;
 
 };
 
@@ -408,6 +405,7 @@ protected:
   /// built.
   void create_notify_manager (void);
   void delete_notify_manager (void);
+  int ensure_notify_manager (void);
 
   /// Define the maximum number of asynchronous I/O requests
   /// for the current OS
@@ -475,6 +473,12 @@ protected:
 
   /// Mutex to protect work with lists.
   ACE_SYNCH_MUTEX mutex_;
+
+  /// Serialize lazy creation/destruction of the notify pipe manager.
+  ACE_SYNCH_MUTEX notify_manager_mutex_;
+
+  /// Serialize aio_suspend wait/dequeue handling for the AIOCB backend.
+  ACE_SYNCH_MUTEX dispatch_mutex_;
 
   /// The purpose of this member is only to identify asynchronous request
   /// from NotifyManager. We will reserve for it always slot 0
