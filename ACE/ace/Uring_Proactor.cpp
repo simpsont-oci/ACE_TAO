@@ -124,7 +124,7 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
       bool should_wait = (processed == 0);
 
       {
-        ACE_Guard<ACE_Thread_Mutex> guard (this->cq_mutex_);
+        ACE_GUARD (ACE_Thread_Mutex, guard, this->cq_mutex_);
         struct io_uring_cqe *cqe = 0;
 
         if (should_wait)
@@ -432,7 +432,7 @@ ACE_Uring_Proactor::create_asynch_timer (const ACE_Handler::Proxy_Ptr &handler_p
 int
 ACE_Uring_Proactor::post_wakeup_completions (int count)
 {
-  ACE_Guard<ACE_Thread_Mutex> guard(this->sq_mutex_);
+  ACE_GUARD (ACE_Thread_Mutex, guard, this->sq_mutex_);
   for (int i = 0; i < count; ++i)
     {
       struct io_uring_sqe *sqe = ::io_uring_get_sqe (&this->ring_);
