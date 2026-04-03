@@ -14,7 +14,7 @@
 
 #if defined (ACE_HAS_WIN32_OVERLAPPED_IO) || defined (ACE_HAS_AIO_CALLS)
   // This only works on Win32 platforms and on Unix platforms
-  // supporting POSIX aio calls.
+  // supporting POSIX aio calls or io_uring.
 
 //////////////////////////////////////////////////////////////////
 
@@ -37,6 +37,8 @@
 #include "ace/Proactor.h"
 #include "ace/Asynch_Connector.h"
 #include "ace/Time_Value.h"
+#include "ace/Get_Opt.h"
+#include "Proactor_Test_Backend.h"
 
 
 // How long are our fake serial I/O frames?
@@ -353,9 +355,34 @@ FileIOHandler::handle_time_out(const ACE_Time_Value & /*tv*/, const void * /*act
 
 
 int
-run_main(int /*argc*/, ACE_TCHAR * /*argv*/[])
+run_main(int argc, ACE_TCHAR *argv[])
 {
+  ACE_Proactor *proactor = 0;
+  Proactor_Test_Backend::Type backend = Proactor_Test_Backend::BACKEND_DEFAULT;
+  ACE_Get_Opt get_opt (argc, argv, ACE_TEXT ("t:"));
+  int c = 0;
+  while ((c = get_opt ()) != EOF)
+    {
+      switch (c)
+        {
+        case 't':
+          if (Proactor_Test_Backend::parse_type (get_opt.opt_arg (), backend) == 0)
+            break;
+          Proactor_Test_Backend::print_type_usage (argv[0]);
+          return -1;
+        default:
+          Proactor_Test_Backend::print_type_usage (argv[0]);
+          return -1;
+        }
+    }
+
   ACE_START_TEST (ACE_TEXT ("Proactor_File_Test"));
+
+  if (Proactor_Test_Backend::create_proactor (backend, 128, proactor, true) != 0)
+    {
+      ACE_END_TEST;
+      return -1;
+    }
 
   int rc = 0;
   FileIOHandler fileIOHandler;
@@ -380,6 +407,7 @@ run_main(int /*argc*/, ACE_TCHAR * /*argv*/[])
     ACE_Proactor::instance()->proactor_run_event_loop();
   }
 
+  ACE_Proactor::close_singleton ();
   ACE_END_TEST;
 
   return rc;

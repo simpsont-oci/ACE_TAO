@@ -1304,6 +1304,14 @@ project(Proactor Scatter Gather Test) : acetest {
   }
 }
 
+project(Proactor Stress Test) : acetest {
+  avoids += ace_for_tao
+  exename = Proactor_Stress_Test
+  Source_Files {
+    Proactor_Stress_Test.cpp
+  }
+}
+
 project(Proactor Test) : acetest {
   avoids += ace_for_tao
   exename = Proactor_Test
@@ -1333,6 +1341,14 @@ project(Proactor UDP Test) : acetest {
   exename = Proactor_UDP_Test
   Source_Files {
     Proactor_UDP_Test.cpp
+  }
+}
+
+project(Proactor Contract Test) : acetest {
+  avoids += ace_for_tao
+  exename = Proactor_Contract_Test
+  Source_Files {
+    Proactor_Contract_Test.cpp
   }
 }
 

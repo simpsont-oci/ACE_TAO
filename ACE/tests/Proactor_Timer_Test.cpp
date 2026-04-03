@@ -13,20 +13,21 @@
  */
 //=============================================================================
 
-
 #include "test_config.h"
 #include "ace/Trace.h"
 
 #if defined (ACE_HAS_WIN32_OVERLAPPED_IO) || defined (ACE_HAS_AIO_CALLS)
   // This only works on Win32 platforms and on Unix platforms
-  // supporting POSIX aio calls.
+  // supporting POSIX aio calls or io_uring.
 
 #include "ace/OS_NS_unistd.h"
+#include "ace/OS_NS_string.h"
 #include "ace/Proactor.h"
 #include "ace/High_Res_Timer.h"
 #include "ace/Asynch_IO.h"
 #include "ace/Timer_Heap.h"
 #include "ace/Auto_Ptr.h"
+#include "Proactor_Test_Backend.h"
 
 static int    done = 0;
 static size_t counter = 0;
@@ -283,14 +284,44 @@ test_cancel_repeat_timer (void)
 }
 
 
-// If any command line arg is given, run the test with high res timer
-// queue. Else run it normally.
+// If any command line arg is given (other than -t u), run the test with
+// high res timer queue. Else run it normally.
 int
-run_main (int argc, ACE_TCHAR *[])
+run_main (int argc, ACE_TCHAR *argv[])
 {
+  ACE_Proactor *proactor = 0;
+  Proactor_Test_Backend::Type backend = Proactor_Test_Backend::BACKEND_DEFAULT;
+
   ACE_START_TEST (ACE_TEXT ("Proactor_Timer_Test"));
 
-  if (argc > 1)
+  // Determine whether to run with high-res timer queue.  Ignore the
+  // backend selection arguments so they don't accidentally trigger
+  // this branch.
+  bool use_hires = false;
+  for (int i = 1; i < argc; ++i)
+    {
+      if (ACE_OS::strcmp (argv[i], ACE_TEXT ("-t")) == 0)
+        {
+          if (i + 1 >= argc
+              || Proactor_Test_Backend::parse_type (argv[i + 1], backend) != 0)
+            {
+              Proactor_Test_Backend::print_type_usage (argv[0]);
+              ACE_END_TEST;
+              return -1;
+            }
+          ++i; // skip the type argument
+          continue;
+        }
+      use_hires = true;
+    }
+
+  if (Proactor_Test_Backend::create_proactor (backend, 128, proactor, true) != 0)
+    {
+      ACE_END_TEST;
+      return -1;
+    }
+
+  if (use_hires)
     {
       ACE_DEBUG ((LM_DEBUG,
                   ACE_TEXT ("Running with high-res timer queue\n")));
@@ -310,7 +341,7 @@ run_main (int argc, ACE_TCHAR *[])
       // code ...
       typedef ACE_Timer_Heap_T<ACE_Handler*,ACE_Proactor_Handle_Timeout_Upcall,ACE_SYNCH_RECURSIVE_MUTEX,ACE_FPointer_Time_Policy> Timer_Queue;
 
-      auto_ptr<Timer_Queue> tq(new Timer_Queue);
+      ACE_Auto_Ptr<Timer_Queue> tq(new Timer_Queue);
       // ... notice how the policy is in the derived timer queue type.
       // The abstract timer queue does not have a time policy ...
       tq->set_time_policy(&ACE_High_Res_Timer::gettimeofday_hr);
@@ -335,6 +366,7 @@ run_main (int argc, ACE_TCHAR *[])
 
   test_cancel_repeat_timer ();
 
+  ACE_Proactor::close_singleton ();
   ACE_END_TEST;
   return 0;
 }

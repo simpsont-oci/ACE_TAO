@@ -44,6 +44,8 @@
 
 #include "ace/SOCK_Connector.h"
 
+#include "Proactor_Test_Backend.h"
+
 // For the Acceptor/Connector handlers maintenance lists
 static const  int SENDERS   = 1;
 static const  int RECEIVERS = 2;
@@ -62,6 +64,7 @@ static const ACE_TCHAR *output_file = ACE_TEXT("output");
 static int client_only = 0;
 static int server_only = 0;
 static size_t chunk_size = 0;
+static Proactor_Test_Backend::Type backend = Proactor_Test_Backend::BACKEND_DEFAULT;
 
 enum
 {
@@ -869,7 +872,11 @@ Writer::handle_write_file (const ACE_Asynch_Write_File::Result &result)
   if (0 == this->receiver_count_ &&
       0 == this->io_count_)
     {
-      ACE_TEST_ASSERT (0 == this->odd_chain_ && 0 == this->even_chain_);
+      if (0 != this->odd_chain_ || 0 != this->even_chain_)
+        {
+          this->initiate_write_file ();
+          return;
+        }
 
       ACE_DEBUG ((LM_DEBUG,
                   ACE_TEXT ("Writer::handle_write_file")
@@ -1328,7 +1335,7 @@ parse_args (int argc, ACE_TCHAR *argv[])
   if (argc == 1) // no arguments , so one button test
     return 0;
 
-  ACE_Get_Opt get_opt (argc, argv, ACE_TEXT ("f:csh:p:u"));
+  ACE_Get_Opt get_opt (argc, argv, ACE_TEXT ("f:csh:p:t:u"));
   int c;
 
   while ((c = get_opt ()) != EOF)
@@ -1352,6 +1359,10 @@ parse_args (int argc, ACE_TCHAR *argv[])
         case 'p':
           port = ACE_OS::atoi (get_opt.opt_arg ());
           break;
+        case 't':
+          if (Proactor_Test_Backend::parse_type (get_opt.opt_arg (), backend) != 0)
+            return print_usage (argc, argv);
+          break;
         case 'u':
         default:
           return print_usage (argc, argv);
@@ -1368,6 +1379,13 @@ run_main (int argc, ACE_TCHAR *argv[])
 
   if (::parse_args (argc, argv) == -1)
     return -1;
+
+  ACE_Proactor *proactor = 0;
+  if (Proactor_Test_Backend::create_proactor (backend, 128, proactor, true) != 0)
+    {
+      ACE_END_TEST;
+      return -1;
+    }
 
   chunk_size = ACE_OS::getpagesize ();
 

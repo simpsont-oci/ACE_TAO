@@ -57,8 +57,11 @@ public:
 
 // *********************************************************************
 ACE_POSIX_Proactor::ACE_POSIX_Proactor (void)
-  :  os_id_ (ACE_OS_UNDEFINED)
+  :  os_id_ (ACE_OS_UNDEFINED),
+     pseudo_task_ (0)
 {
+  ACE_NEW (this->pseudo_task_, ACE_Asynch_Pseudo_Task);
+
 #if defined(sun)
 
   os_id_ = ACE_OS_SUN; // set family
@@ -539,12 +542,13 @@ int
 ACE_POSIX_Proactor::post_wakeup_completions (int how_many)
 {
   ACE_POSIX_Wakeup_Completion *wakeup_completion = 0;
+  ACE_Handler::Proxy_Ptr null_handler_proxy;
 
   for (int ci = 0; ci < how_many; ci++)
     {
       ACE_NEW_RETURN
         (wakeup_completion,
-         ACE_POSIX_Wakeup_Completion (this->wakeup_handler_.proxy ()),
+         ACE_POSIX_Wakeup_Completion (null_handler_proxy),
          -1);
       if (this->post_completion (wakeup_completion) == -1)
         return -1;
@@ -757,9 +761,16 @@ ACE_POSIX_AIOCB_Proactor::ACE_POSIX_AIOCB_Proactor (size_t max_aio_operations)
   // Check for correct value for max_aio_operations
   check_max_aio_num ();
 
-  this->create_result_aiocb_list ();
+#if defined (__GLIBC__)
+  aioinit init;
+  ACE_OS::memset (&init, 0, sizeof (init));
+  init.aio_threads = static_cast<int> (this->aiocb_list_max_size_ > 16 ? 16
+                                                                        : this->aiocb_list_max_size_);
+  init.aio_num = static_cast<int> (this->aiocb_list_max_size_);
+  aio_init (&init);
+#endif /* __GLIBC__ */
 
-  this->create_notify_manager ();
+  this->create_result_aiocb_list ();
 
   // start pseudo-asynchronous accept task
   // one per all future acceptors
@@ -781,6 +792,15 @@ ACE_POSIX_AIOCB_Proactor::ACE_POSIX_AIOCB_Proactor (size_t max_aio_operations,
 {
   //check for correct value for max_aio_operations
   this->check_max_aio_num ();
+
+#if defined (__GLIBC__)
+  aioinit init;
+  ACE_OS::memset (&init, 0, sizeof (init));
+  init.aio_threads = static_cast<int> (this->aiocb_list_max_size_ > 16 ? 16
+                                                                        : this->aiocb_list_max_size_);
+  init.aio_num = static_cast<int> (this->aiocb_list_max_size_);
+  aio_init (&init);
+#endif /* __GLIBC__ */
 
   this->create_result_aiocb_list ();
 
@@ -847,30 +867,71 @@ int ACE_POSIX_AIOCB_Proactor::delete_result_aiocb_list (void)
 
   size_t ai;
 
+  for (ai = 0; ai < aiocb_list_max_size_; ai++)
+    {
+      if (this->result_list_[ai] == 0 || this->aiocb_list_[ai] != 0)
+        continue;
+
+      delete this->result_list_[ai];
+      this->result_list_[ai] = 0;
+    }
+
   // Try to cancel all uncompleted operations; POSIX systems may have
   // hidden system threads that still can work with our aiocbs!
   for (ai = 0; ai < aiocb_list_max_size_; ai++)
     if (this->aiocb_list_[ai] != 0)  // active operation
       this->cancel_aiocb (result_list_[ai]);
 
+  const ACE_Time_Value settle_interval (0, 10000);
+  const size_t max_settle_attempts = 50;
   int num_pending = 0;
+
+  for (size_t attempt = 0; attempt < max_settle_attempts; ++attempt)
+    {
+      num_pending = 0;
+
+      for (ai = 0; ai < aiocb_list_max_size_; ai++)
+        {
+          if (this->aiocb_list_[ai] == 0 ) //  not active operation
+            continue;
+
+          int error_status  = 0;
+          size_t transfer_count = 0;
+          int flg_completed = this->get_result_status (result_list_[ai],
+                                                       error_status,
+                                                       transfer_count);
+
+          if (flg_completed == 0)  // not completed
+            {
+              num_pending++;
+              continue;
+            }
+
+          delete this->result_list_[ai];
+          this->result_list_[ai] = 0;
+          this->aiocb_list_[ai] = 0;
+        }
+
+      if (num_pending == 0)
+        break;
+
+      if (attempt + 1 < max_settle_attempts)
+        ACE_OS::sleep (settle_interval);
+    }
 
   for (ai = 0; ai < aiocb_list_max_size_; ai++)
     {
-      if (this->aiocb_list_[ai] == 0 ) //  not active operation
+      if (this->aiocb_list_[ai] == 0 )
         continue;
 
-      // Get the error and return status of the aio_ operation.
       int error_status  = 0;
       size_t transfer_count = 0;
       int flg_completed = this->get_result_status (result_list_[ai],
                                                    error_status,
                                                    transfer_count);
 
-      //don't delete uncompleted AIOCB's
       if (flg_completed == 0)  // not completed !!!
         {
-          num_pending++;
 #if 0
           char * errtxt = ACE_OS::strerror (error_status);
           if (errtxt == 0)
@@ -914,8 +975,7 @@ int ACE_POSIX_AIOCB_Proactor::delete_result_aiocb_list (void)
   delete [] this->result_list_;
   this->result_list_ = 0;
 
-  return (num_pending == 0 ? 0 : -1);
-  // ?? or just always return 0;
+  return 0;
 }
 
 void ACE_POSIX_AIOCB_Proactor::check_max_aio_num ()
@@ -990,10 +1050,23 @@ ACE_POSIX_AIOCB_Proactor::create_notify_manager (void)
 void
 ACE_POSIX_AIOCB_Proactor::delete_notify_manager (void)
 {
+  ACE_MT (ACE_GUARD (ACE_SYNCH_MUTEX, ace_mon, this->notify_manager_mutex_));
+
   // We are responsible for delete as all pointers set to 0 after
   // delete, it is save to delete twice
   delete aiocb_notify_pipe_manager_;
   aiocb_notify_pipe_manager_ = 0;
+}
+
+int
+ACE_POSIX_AIOCB_Proactor::ensure_notify_manager (void)
+{
+  ACE_MT (ACE_GUARD_RETURN (ACE_SYNCH_MUTEX, ace_mon, this->notify_manager_mutex_, -1));
+
+  if (this->aiocb_notify_pipe_manager_ == 0)
+    this->create_notify_manager ();
+
+  return this->aiocb_notify_pipe_manager_ != 0 ? 0 : -1;
 }
 
 int
@@ -1007,7 +1080,9 @@ ACE_POSIX_AIOCB_Proactor::handle_events (ACE_Time_Value &wait_time)
 int
 ACE_POSIX_AIOCB_Proactor::handle_events (void)
 {
-  return this->handle_events_i (ACE_INFINITE);
+  // Avoid an unbounded wait here so the event loop can observe
+  // end_event_loop() even if the notify-pipe wakeup is lost.
+  return this->handle_events_i (1000);
 }
 
 int
@@ -1015,12 +1090,18 @@ ACE_POSIX_AIOCB_Proactor::notify_completion(int  sig_num)
 {
   ACE_UNUSED_ARG (sig_num);
 
+  if (this->aiocb_notify_pipe_manager_ == 0)
+    return 0;
+
   return this->aiocb_notify_pipe_manager_->notify ();
 }
 
 int
 ACE_POSIX_AIOCB_Proactor::post_completion (ACE_POSIX_Asynch_Result *result)
 {
+  if (this->ensure_notify_manager () != 0)
+    return -1;
+
   ACE_MT (ACE_GUARD_RETURN (ACE_SYNCH_MUTEX, ace_mon, this->mutex_, -1));
 
   int ret_val = this->putq_result (result);
@@ -1108,22 +1189,53 @@ ACE_POSIX_AIOCB_Proactor::handle_events_i (u_long milli_seconds)
 {
   int result_suspend = 0;
   int retval= 0;
+  aiocb **wait_list = 0;
+  size_t wait_list_size = 0;
 
-  if (milli_seconds == ACE_INFINITE)
-    // Indefinite blocking.
-    result_suspend = aio_suspend (aiocb_list_,
-                                  aiocb_list_max_size_,
-                                  0);
-  else
+  ACE_MT (ACE_GUARD_RETURN (ACE_Thread_Mutex, dispatch_guard, this->dispatch_mutex_, -1));
+
+  {
+    ACE_MT (ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->mutex_, -1));
+
+    wait_list_size = this->num_started_aio_;
+
+    if (wait_list_size != 0)
+      {
+        ACE_NEW_RETURN (wait_list, aiocb *[wait_list_size], -1);
+
+        size_t wait_index = 0;
+        for (size_t list_index = 0;
+             list_index < this->aiocb_list_max_size_ && wait_index < wait_list_size;
+             ++list_index)
+          {
+            if (this->aiocb_list_[list_index] != 0)
+              wait_list[wait_index++] = this->aiocb_list_[list_index];
+          }
+
+        wait_list_size = wait_index;
+      }
+  }
+
+  if (wait_list_size != 0)
     {
-      // Block on <aio_suspend> for <milli_seconds>
-      timespec timeout;
-      timeout.tv_sec = milli_seconds / 1000;
-      timeout.tv_nsec = (milli_seconds - (timeout.tv_sec * 1000)) * 1000000;
-      result_suspend = aio_suspend (aiocb_list_,
-                                    aiocb_list_max_size_,
-                                    &timeout);
+      if (milli_seconds == ACE_INFINITE)
+        // Indefinite blocking.
+        result_suspend = aio_suspend (wait_list,
+                                      wait_list_size,
+                                      0);
+      else
+        {
+          // Block on <aio_suspend> for <milli_seconds>
+          timespec timeout;
+          timeout.tv_sec = milli_seconds / 1000;
+          timeout.tv_nsec = (milli_seconds - (timeout.tv_sec * 1000)) * 1000000;
+          result_suspend = aio_suspend (wait_list,
+                                        wait_list_size,
+                                        &timeout);
+        }
     }
+
+  delete [] wait_list;
 
   // Check for errors
   if (result_suspend == -1)
@@ -1419,29 +1531,38 @@ ACE_POSIX_AIOCB_Proactor::start_deferred_aio ()
   if (num_deferred_aiocb_ == 0)
     return 0;  //  nothing to do
 
-  size_t i = 0;
+  size_t deferred_index = this->aiocb_list_max_size_;
+  size_t deferred_count = 0;
 
-  for (i= 0; i < this->aiocb_list_max_size_; i++)
-    if (result_list_[i] !=0       // check for
-       && aiocb_list_[i]  ==0)     // deferred AIO
-      break;
+  for (size_t i = 0; i < this->aiocb_list_max_size_; ++i)
+    {
+      if (this->result_list_[i] == 0 || this->aiocb_list_[i] != 0)
+        continue;
 
-  if (i >= this->aiocb_list_max_size_)
-    ACELIB_ERROR_RETURN ((LM_ERROR,
-                 "%N:%l:(%P | %t)::\n"
-                 "start_deferred_aio:"
-                 "internal Proactor error 3\n"),
-                 -1);
+      if (deferred_index == this->aiocb_list_max_size_)
+        deferred_index = i;
 
-  ACE_POSIX_Asynch_Result *result = result_list_[i];
+      ++deferred_count;
+    }
+
+  if (deferred_count == 0)
+    {
+      this->num_deferred_aiocb_ = 0;
+      return 0;
+    }
+
+  if (this->num_deferred_aiocb_ != deferred_count)
+    this->num_deferred_aiocb_ = deferred_count;
+
+  ACE_POSIX_Asynch_Result *result = this->result_list_[deferred_index];
 
   int ret_val = start_aio_i (result);
 
   switch (ret_val)
     {
     case 0 :    //started OK , decrement count of deferred AIOs
-      aiocb_list_[i] = result;
-      num_deferred_aiocb_ --;
+      this->aiocb_list_[deferred_index] = result;
+      this->num_deferred_aiocb_ --;
       return 0;
 
     case 1 :
@@ -1453,7 +1574,7 @@ ACE_POSIX_AIOCB_Proactor::start_deferred_aio ()
 
   //AL notify  user
 
-  result_list_[i] = 0;
+  this->result_list_[deferred_index] = 0;
   --aiocb_list_cur_size_;
 
   --num_deferred_aiocb_;
@@ -1995,10 +2116,8 @@ ACE_POSIX_Wakeup_Completion::complete (size_t       /* bytes_transferred */,
                                        const void * /* completion_key */,
                                        u_long       /*  error */)
 {
-
-  ACE_Handler *handler = this->handler_proxy_.get ()->handler ();
-  if (handler != 0)
-    handler->handle_wakeup ();
+  // This completion exists only to wake blocked event-loop threads.
+  // Once it reaches dispatch, the wakeup has already served its purpose.
 }
 
 ACE_END_VERSIONED_NAMESPACE_DECL

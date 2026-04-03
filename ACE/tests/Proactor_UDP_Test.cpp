@@ -51,8 +51,16 @@
 
 #endif /* ACE_WIN32 */
 
+#include "Proactor_Test_Backend.h"
+
 // Proactor Type (UNIX only, Win32 ignored)
-typedef enum { DEFAULT = 0, AIOCB, SIG, SUN, CB } ProactorType;
+typedef Proactor_Test_Backend::Type ProactorType;
+static const ProactorType DEFAULT = Proactor_Test_Backend::BACKEND_DEFAULT;
+static const ProactorType AIOCB = Proactor_Test_Backend::BACKEND_AIOCB;
+static const ProactorType SIG = Proactor_Test_Backend::BACKEND_SIG;
+static const ProactorType SUN = Proactor_Test_Backend::BACKEND_SUN;
+static const ProactorType CB = Proactor_Test_Backend::BACKEND_CB;
+static const ProactorType URING = Proactor_Test_Backend::BACKEND_URING;
 static ProactorType proactor_type = DEFAULT;
 
 // POSIX : > 0 max number aio operations  proactor,
@@ -196,80 +204,10 @@ MyTask::create_proactor (ProactorType type_proactor, size_t max_op)
                     -1);
 
   ACE_TEST_ASSERT (this->proactor_ == 0);
-
-#if defined (ACE_WIN32)
-
-  ACE_UNUSED_ARG (type_proactor);
-  ACE_UNUSED_ARG (max_op);
-
-  ACE_WIN32_Proactor *proactor_impl = 0;
-
-  ACE_NEW_RETURN (proactor_impl,
-                  ACE_WIN32_Proactor,
-                  -1);
-
-  ACE_DEBUG ((LM_DEBUG,
-              ACE_TEXT("(%t) Create Proactor Type = WIN32\n")));
-
-#elif defined (ACE_HAS_AIO_CALLS)
-
-  ACE_POSIX_Proactor * proactor_impl = 0;
-
-  switch (type_proactor)
-    {
-    case AIOCB:
-      ACE_NEW_RETURN (proactor_impl,
-                      ACE_POSIX_AIOCB_Proactor (max_op),
-                      -1);
-      ACE_DEBUG ((LM_DEBUG,
-                  ACE_TEXT ("(%t) Create Proactor Type = AIOCB\n")));
-      break;
-
-#if defined(ACE_HAS_POSIX_REALTIME_SIGNALS)
-    case SIG:
-      ACE_NEW_RETURN (proactor_impl,
-                      ACE_POSIX_SIG_Proactor (max_op),
-                      -1);
-      ACE_DEBUG ((LM_DEBUG,
-                  ACE_TEXT ("(%t) Create Proactor Type = SIG\n")));
-      break;
-#endif /* ACE_HAS_POSIX_REALTIME_SIGNALS */
-
-#  if defined (sun)
-    case SUN:
-      ACE_NEW_RETURN (proactor_impl,
-                      ACE_SUN_Proactor (max_op),
-                      -1);
-      ACE_DEBUG ((LM_DEBUG,
-                  ACE_TEXT("(%t) Create Proactor Type = SUN\n")));
-      break;
-#  endif /* sun */
-
-#  if !defined(ACE_HAS_BROKEN_SIGEVENT_STRUCT)
-    case CB:
-      ACE_NEW_RETURN (proactor_impl,
-                      ACE_POSIX_CB_Proactor (max_op),
-                      -1);
-      ACE_DEBUG ((LM_DEBUG,
-                  ACE_TEXT ("(%t) Create Proactor Type = CB\n")));
-      break;
-#  endif /* !ACE_HAS_BROKEN_SIGEVENT_STRUCT */
-
-    default:
-      ACE_DEBUG ((LM_DEBUG,
-                  ACE_TEXT ("(%t) Create Proactor Type = DEFAULT\n")));
-      break;
-  }
-
-#endif /* ACE_WIN32 */
-
-  // always delete implementation  1 , not  !(proactor_impl == 0)
-  ACE_NEW_RETURN (this->proactor_,
-                  ACE_Proactor (proactor_impl, 1 ),
-                  -1);
-  // Set new singleton and delete it in close_singleton()
-  ACE_Proactor::instance (this->proactor_, 1);
-  return 0;
+  return Proactor_Test_Backend::create_proactor (type_proactor,
+                                                 max_op,
+                                                 this->proactor_,
+                                                 true);
 }
 
 int
@@ -2016,34 +1954,7 @@ print_usage (int /* argc */, ACE_TCHAR *argv[])
 static int
 set_proactor_type (const ACE_TCHAR *ptype)
 {
-  if (!ptype)
-    return 0;
-
-  switch (ACE_OS::ace_toupper (*ptype))
-    {
-    case 'D':
-      proactor_type = DEFAULT;
-      return 1;
-    case 'A':
-      proactor_type = AIOCB;
-      return 1;
-    case 'I':
-      proactor_type = SIG;
-      return 1;
-#if defined (sun)
-    case 'S':
-      proactor_type = SUN;
-      return 1;
-#endif /* sun */
-#if !defined (ACE_HAS_BROKEN_SIGEVENT_STRUCT)
-     case 'C':
-       proactor_type = CB;
-       return 1;
-#endif /* !ACE_HAS_BROKEN_SIGEVENT_STRUCT */
-    default:
-      break;
-    }
-  return 0;
+  return Proactor_Test_Backend::parse_type (ptype, proactor_type) == 0;
 }
 
 static int

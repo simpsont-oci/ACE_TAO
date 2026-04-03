@@ -69,6 +69,10 @@ ifeq ($(threads),1)
   LIBS += -lrt
 endif
 
+ifeq ($(uring),1)
+  LIBS += -luring
+endif
+
 ifeq ($(optimize),1)
   SOFLAGS += -Wl,-O3
 endif

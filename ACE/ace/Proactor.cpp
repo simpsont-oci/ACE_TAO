@@ -124,32 +124,19 @@ ACE_Proactor_Timer_Handler::signal (void)
 int
 ACE_Proactor_Timer_Handler::svc (void)
 {
-  ACE_Time_Value absolute_time;
   ACE_Time_Value relative_time;
   int result = 0;
 
   while (this->shutting_down_ == 0)
     {
-      // Check whether the timer queue has any items in it.
-      if (this->proactor_.timer_queue ()->is_empty () == 0)
+      ACE_Time_Value *wait_time =
+        this->proactor_.timer_queue ()->calculate_timeout (0,
+                                                           &relative_time);
+
+      // Block using the timer queue's lock-safe timeout calculation.
+      if (wait_time != 0)
         {
-          // Get the earliest absolute time.
-          absolute_time = this->proactor_.timer_queue ()->earliest_time ();
-
-          // Get current time from timer queue since we don't know
-          // which <gettimeofday> was used.
-          ACE_Time_Value cur_time =
-            this->proactor_.timer_queue ()->gettimeofday ();
-
-          // Compare absolute time with curent time received from the
-          // timer queue.
-          if (absolute_time > cur_time)
-            relative_time = absolute_time - cur_time;
-          else
-            relative_time = ACE_Time_Value::zero;
-
-          // Block for relative time.
-          result = this->timer_event_.wait (&relative_time, 0);
+          result = this->timer_event_.wait (wait_time, 0);
         }
       else
         // The timer queue has no entries, so wait indefinitely.
@@ -613,6 +600,14 @@ ACE_Proactor::proactor_event_loop_done (void)
 int
 ACE_Proactor::close (void)
 {
+  // Stop the timer thread before tearing down the implementation it
+  // posts completions into.
+  if (this->timer_handler_)
+    {
+      delete this->timer_handler_;
+      this->timer_handler_ = 0;
+    }
+
   // Close the implementation.
   if (this->implementation ()->close () == -1)
     ACELIB_ERROR ((LM_ERROR,
@@ -624,13 +619,6 @@ ACE_Proactor::close (void)
     {
       delete this->implementation ();
       this->implementation_ = 0;
-    }
-
-  // Delete the timer handler.
-  if (this->timer_handler_)
-    {
-      delete this->timer_handler_;
-      this->timer_handler_ = 0;
     }
 
   // Delete the timer queue.
