@@ -124,18 +124,6 @@ namespace TAO
   }
 
   template <typename TT, typename TRDT, typename PSTRAT>
-  ACE_INLINE bool
-  Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::is_idle (HASH_MAP_ENTRY *&entry) const
-  {
-    ACE_MT (ACE_GUARD_RETURN (ACE_Lock, guard, *this->cache_lock_, false));
-    if (entry == nullptr) // in case someone beat us to it (entry is reference to transport member)
-      return false;
-
-    // @todo check if the state is idle and purgable, if so, then make the state so that it can't be used to make this atomic
-    return entry->item ().recycle_state () == ENTRY_IDLE_AND_PURGABLE;
-  }
-
-  template <typename TT, typename TRDT, typename PSTRAT>
   ACE_INLINE typename Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::Find_Result
   Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::find (transport_descriptor_type *prop,
                                  transport_type *&transport,
