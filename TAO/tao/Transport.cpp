@@ -581,7 +581,6 @@ TAO_Transport::update_transport ()
                   this->id ()));
     }
 
-  // @todo jwi timer update????
   return this->transport_cache_manager ().update_entry (this->cache_map_entry_);
 }
 
