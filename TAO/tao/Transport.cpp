@@ -338,7 +338,7 @@ TAO_Transport::close_connection ()
                   this->id ()));
     }
 
-  // Cancel any pending time
+  // Cancel any pending timer
   this->cancel_idle_timer ();
 
   this->connection_handler_i ()->close_connection ();
