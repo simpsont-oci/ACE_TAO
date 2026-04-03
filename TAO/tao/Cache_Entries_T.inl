@@ -112,7 +112,6 @@ namespace TAO
       is_delete_ (false),
       index_ (0)
   {
-
   }
 
   template <typename TRANSPORT_DESCRIPTOR_TYPE> ACE_INLINE
