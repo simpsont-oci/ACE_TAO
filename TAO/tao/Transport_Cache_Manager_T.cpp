@@ -387,7 +387,7 @@ namespace TAO
                               guard,
                               *this->cache_lock_, -1));
 
-    if (entry == nullptr)
+    if (!entry)
       return -1;
 
     purging_strategy *st = this->purging_strategy_;

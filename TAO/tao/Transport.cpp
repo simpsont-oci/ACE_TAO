@@ -2945,8 +2945,14 @@ void
 TAO_Transport::schedule_idle_timer ()
 {
   int const timeout_sec = this->orb_core_->resource_factory ()->transport_idle_timeout ();
-  if ((timeout_sec > 0) && (this->idle_timer_id_ == -1))
+  if (timeout_sec > 0)
     {
+      if (this->idle_timer_id_ != -1)
+        {
+          // The transport was marked as idle, but we have a timer running, cancel that old timer
+          // first
+          this->cancel_idle_timer ();
+        }
       ACE_Reactor *reactor = this->orb_core_->reactor ();
       if (reactor)
         {
