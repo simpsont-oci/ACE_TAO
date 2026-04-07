@@ -698,6 +698,8 @@ public:
   Master (TestData *tester, const ACE_INET_Addr &recv_addr, int expected);
   ~Master (void);
 
+  void shutdown (void);
+
   // Called when dgram receive operation completes.
   virtual void handle_read_dgram (const ACE_Asynch_Read_Dgram::Result &result);
 
@@ -710,7 +712,8 @@ private:
   ACE_Asynch_Read_Dgram rd_;
   ACE_Message_Block *mb_;
   ACE_Atomic_Op<ACE_SYNCH_MUTEX, int> sessions_expected_;
-  volatile bool recv_in_progress_;
+  ACE_Atomic_Op<ACE_SYNCH_MUTEX, int> recv_in_progress_;
+  ACE_Atomic_Op<ACE_SYNCH_MUTEX, int> shutting_down_;
 };
 
 // *************************************************************
@@ -719,7 +722,8 @@ Master::Master (TestData *tester, const ACE_INET_Addr &recv_addr, int expected)
     recv_addr_ (recv_addr),
     mb_ (0),
     sessions_expected_ (expected),
-    recv_in_progress_ (false)
+    recv_in_progress_ (0),
+    shutting_down_ (0)
 {
   if (this->sock_.open (recv_addr) == -1)
     ACE_ERROR ((LM_ERROR, ACE_TEXT ("Master socket %p\n"), ACE_TEXT ("open")));
@@ -736,9 +740,7 @@ Master::Master (TestData *tester, const ACE_INET_Addr &recv_addr, int expected)
 
 Master::~Master (void)
 {
-  if (this->recv_in_progress_)
-    this->rd_.cancel ();
-  this->sock_.close ();
+  this->shutdown ();
 
   if (this->mb_ != 0)
     {
@@ -748,8 +750,21 @@ Master::~Master (void)
 }
 
 void
+Master::shutdown (void)
+{
+  this->shutting_down_ = 1;
+
+  if (this->recv_in_progress_.value () != 0)
+    this->rd_.cancel ();
+
+  this->sock_.close ();
+}
+
+void
 Master::handle_read_dgram (const ACE_Asynch_Read_Dgram::Result &result)
 {
+  this->recv_in_progress_ = 0;
+
   // We should only receive Start datagrams with valid addresses to reply to.
   if (result.success ())
     {
@@ -849,6 +864,10 @@ Master::handle_read_dgram (const ACE_Asynch_Read_Dgram::Result &result)
       if (prio == LM_DEBUG)
         return;
     }
+
+  if (this->shutting_down_.value () != 0)
+    return;
+
   this->start_recv ();
 }
 
@@ -863,7 +882,7 @@ Master::start_recv (void)
   if (this->rd_.recv (this->mb_, unused, 0) == -1)
     ACE_ERROR ((LM_ERROR, ACE_TEXT ("(%t) Master %p\n"), ACE_TEXT ("recv")));
   else
-    this->recv_in_progress_ = true;
+    this->recv_in_progress_ = 1;
 }
 
 // ***************************************************
@@ -2052,16 +2071,20 @@ run_main (int argc, ACE_TCHAR *argv[])
 
   MyTask    task1;
   TestData  test;
+  int started = 0;
+  Master *master = 0;
+  Connector *connector = 0;
 
   if (task1.start (threads, proactor_type, max_aio_operations) == 0)
     {
+      started = 1;
       // NOTE - there's no real reason this test is limited to IPv4 other
       // than the way Session_Data is set up - to expand this test to work
       // on IPv6 as well as IPv4, you need to do some work on passing the
       // Session_Data address differently.
       ACE_INET_Addr addr (port, ACE_LOCALHOST, AF_INET);
-      Master master (&test, addr, clients);
-      Connector connector (&test);
+      ACE_NEW_RETURN (master, Master (&test, addr, clients), -1);
+      ACE_NEW_RETURN (connector, Connector (&test), -1);
       int rc = 0;
 
       if (both != 0 || host == 0) // Acceptor
@@ -2078,24 +2101,39 @@ run_main (int argc, ACE_TCHAR *argv[])
           if (addr.set (port, host, 1, addr.get_type ()) == -1)
             ACE_ERROR ((LM_ERROR, ACE_TEXT ("%p\n"), host));
           else
-            rc += connector.start (addr, clients);
+            rc += connector->start (addr, clients);
         }
 
-      // Wait a few seconds to let things get going, then poll til
-      // all sessions are done. Note that when we exit this scope, the
-      // Acceptor and Connector will be destroyed, which should prevent
-      // further connections and also test how well destroyed handlers
-      // are handled.
+      // Let the sessions get going, then wait for them to drain while
+      // the master and connector are still alive. Destroying them
+      // earlier leaves callbacks racing with stack lifetime.
       ACE_OS::sleep (3);
-    }
-  ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("(%t) Sleeping til sessions run down.\n")));
-  while (!test.testing_done ())
-    ACE_OS::sleep (1);
 
-  test.stop_all ();
+      ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("(%t) Sleeping til sessions run down.\n")));
+      while (!test.testing_done ())
+        ACE_OS::sleep (1);
+
+      test.stop_all ();
+
+      if (master != 0)
+        {
+          master->shutdown ();
+          ACE_OS::sleep (1);
+        }
+    }
+
+  if (started)
+    {
+      // Let canceled connect completions drain before stopping
+      // the proactor thread.
+      ACE_OS::sleep (1);
+    }
 
   ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("(%t) Stop Thread Pool Task\n")));
   task1.stop ();
+
+  delete connector;
+  delete master;
 
   ACE_END_TEST;
 

@@ -16,6 +16,7 @@
 #include "ace/OS_NS_errno.h"
 #include "ace/OS_NS_string.h"
 #include "ace/OS_NS_sys_socket.h"
+#include "ace/OS_NS_Thread.h"
 #include "ace/Addr.h"
 #include "ace/Log_Category.h"
 
@@ -30,9 +31,10 @@ ACE_Uring_Asynch_Result::ACE_Uring_Asynch_Result
    const void *act,
    ACE_HANDLE handle,
    u_long offset,
-   u_long offset_high,
+  u_long offset_high,
    ACE_Proactor *proactor)
-  : handler_proxy_ (handler_proxy),
+  : handler_ (0),
+    handler_proxy_ (handler_proxy),
     act_ (act),
     handle_ (handle),
     offset_ (offset),
@@ -42,6 +44,8 @@ ACE_Uring_Asynch_Result::ACE_Uring_Asynch_Result
     error_ (0),
     owner_ (0)
 {
+  ACE_Handler::Proxy *proxy = this->handler_proxy_.get ();
+  this->handler_ = proxy != 0 ? proxy->handler () : 0;
 }
 
 ACE_Uring_Asynch_Result::~ACE_Uring_Asynch_Result (void)
@@ -51,7 +55,14 @@ ACE_Uring_Asynch_Result::~ACE_Uring_Asynch_Result (void)
 ACE_Handler *
 ACE_Uring_Asynch_Result::handler (void) const
 {
-  return this->handler_proxy_.get ()->handler ();
+  ACE_Handler::Proxy *proxy = this->handler_proxy_.get ();
+  return proxy != 0 ? proxy->handler () : 0;
+}
+
+ACE_Handler *
+ACE_Uring_Asynch_Result::dispatch_handler (void) const
+{
+  return this->handler_;
 }
 
 size_t
@@ -135,7 +146,7 @@ ACE_Uring_Asynch_Result::owner (ACE_Uring_Asynch_Operation *operation)
 ACE_Uring_Asynch_Operation *
 ACE_Uring_Asynch_Result::owner (void) const
 {
-  return this->owner_;
+  return this->owner_.value ();
 }
 
 int
@@ -143,6 +154,9 @@ ACE_Uring_Asynch_Result::post_completion (ACE_Proactor_Impl *proactor_impl)
 {
   ACE_Uring_Proactor *up = dynamic_cast<ACE_Uring_Proactor *> (proactor_impl);
   if (up == 0)
+    return -1;
+
+  if (!up->is_initialized ())
     return -1;
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, up->sq_mutex (), -1);
@@ -171,7 +185,7 @@ ACE_Uring_Asynch_Timer::ACE_Uring_Asynch_Timer
 void
 ACE_Uring_Asynch_Timer::complete (size_t, int, const void *, u_long)
 {
-  ACE_Handler *handler = this->handler_proxy_->handler ();
+  ACE_Handler *handler = this->handler ();
   if (handler != 0)
     handler->handle_time_out (this->time_, this->act_);
   delete this;
@@ -190,6 +204,8 @@ ACE_Uring_Asynch_Operation::ACE_Uring_Asynch_Operation (ACE_Uring_Proactor *proa
 
 ACE_Uring_Asynch_Operation::~ACE_Uring_Asynch_Operation (void)
 {
+  if (this->uring_proactor_ != 0 && this->uring_proactor_->is_initialized ())
+    (void) this->cancel ();
 }
 
 int
@@ -258,18 +274,28 @@ ACE_Uring_Asynch_Operation::proactor (void) const
   return this->proactor_;
 }
 
+ACE_Handler *
+ACE_Uring_Asynch_Operation::handler (void)
+{
+  ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->pending_results_lock_, 0);
+  ACE_Handler::Proxy *proxy = this->handler_proxy_.get ();
+  return proxy != 0 ? proxy->handler () : 0;
+}
+
 int
 ACE_Uring_Asynch_Operation::submit_result (ACE_Uring_Asynch_Result *result)
 {
+  this->register_result (result);
+
   int submit_result = this->uring_proactor_->submit_sqe ();
   if (submit_result < 0)
     {
       errno = -submit_result;
+      this->unregister_result (result);
       delete result;
       return -1;
     }
 
-  this->register_result (result);
   return 0;
 }
 
@@ -348,7 +374,7 @@ ACE_Uring_Asynch_Read_Stream_Result::complete (size_t bytes_transferred,
   if (success && this->message_block_ != 0)
     this->message_block_->wr_ptr (bytes_transferred);
 
-  ACE_Handler *handler = this->handler_proxy_->handler ();
+  ACE_Handler *handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Read_Stream::Result result (this);
@@ -522,7 +548,7 @@ ACE_Uring_Asynch_Read_File_Result::complete (size_t bytes_transferred,
   if (success && this->message_block_ != 0)
     this->message_block_->wr_ptr (bytes_transferred);
 
-  ACE_Handler *handler = this->handler_proxy_->handler ();
+  ACE_Handler *handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Read_File::Result result (this);
@@ -584,7 +610,7 @@ ACE_Uring_Asynch_Write_Stream_Result::complete (size_t bytes_transferred,
   if (success && this->message_block_ != 0)
     this->message_block_->rd_ptr (bytes_transferred);
 
-  ACE_Handler *handler = this->handler_proxy_->handler ();
+  ACE_Handler *handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Write_Stream::Result result (this);
@@ -758,7 +784,7 @@ ACE_Uring_Asynch_Write_File_Result::complete (size_t bytes_transferred,
   if (success && this->message_block_ != 0)
     this->message_block_->rd_ptr (bytes_transferred);
 
-  ACE_Handler *handler = this->handler_proxy_->handler ();
+  ACE_Handler *handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Write_File::Result result (this);
@@ -842,7 +868,7 @@ ACE_Uring_Asynch_Accept_Result::complete (size_t bytes_transferred,
   if (success)
     this->accept_handle_ = (ACE_HANDLE) bytes_transferred;
 
-  ACE_Handler *handler = this->handler_proxy_->handler ();
+  ACE_Handler *handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Accept::Result result (this);
@@ -889,7 +915,7 @@ void ACE_Uring_Asynch_Connect_Result::complete (size_t bytes_transferred, int /*
 {
   this->bytes_transferred_ = bytes_transferred;
   this->error_ = error;
-  ACE_Handler *handler = this->handler_proxy_->handler ();
+  ACE_Handler *handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Connect::Result result (this);
@@ -1009,9 +1035,11 @@ int ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle, const ACE_Addr
         {
           ::io_uring_prep_connect (sqe, connect_handle, (struct sockaddr *)remote_sap.get_addr (), remote_sap.get_size ());
           ::io_uring_sqe_set_data (sqe, result);
+          this->register_result (result);
           int submit_result = this->uring_proactor_->submit_sqe ();
           if (submit_result < 0)
             {
+              this->unregister_result (result);
               errno = -submit_result;
               result->set_error (errno);
             }
@@ -1023,10 +1051,7 @@ int ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle, const ACE_Addr
     }
 
   if (success)
-    {
-      this->register_result (result);
-      return 0;
-    }
+    return 0;
 
   if (created_handle && handle != ACE_INVALID_HANDLE)
     {
@@ -1065,7 +1090,7 @@ void ACE_Uring_Asynch_Read_Dgram_Result::complete (size_t bytes_transferred, int
   this->bytes_transferred_ = bytes_transferred;
   this->error_ = error;
   if (success && this->message_block_) this->message_block_->wr_ptr (bytes_transferred);
-  ACE_Handler *handler = this->handler_proxy_->handler ();
+  ACE_Handler *handler = this->handler ();
   if (handler) { ACE_Asynch_Read_Dgram::Result result (this); handler->handle_read_dgram (result); }
   delete this;
 }
@@ -1137,7 +1162,7 @@ void ACE_Uring_Asynch_Write_Dgram_Result::complete (size_t bytes_transferred, in
   this->bytes_transferred_ = bytes_transferred;
   this->error_ = error;
   if (success && this->message_block_) this->message_block_->rd_ptr (bytes_transferred);
-  ACE_Handler *handler = this->handler_proxy_->handler ();
+  ACE_Handler *handler = this->handler ();
   if (handler) { ACE_Asynch_Write_Dgram::Result result (this); handler->handle_write_dgram (result); }
   delete this;
 }
@@ -1237,7 +1262,7 @@ void ACE_Uring_Asynch_Transmit_File_Result::complete (size_t bytes_transferred, 
 {
   this->bytes_transferred_ = bytes_transferred;
   this->error_ = error;
-  ACE_Handler *handler = this->handler_proxy_->handler ();
+  ACE_Handler *handler = this->handler ();
   if (handler) { ACE_Asynch_Transmit_File::Result result (this); handler->handle_transmit_file (result); }
   delete this;
 }

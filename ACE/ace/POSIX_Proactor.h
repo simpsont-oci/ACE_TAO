@@ -26,6 +26,7 @@
 // system calls.
 
 #include "ace/Proactor_Impl.h"
+#include "ace/Atomic_Op.h"
 #include "ace/Free_List.h"
 #include "ace/Pipe.h"
 #include "ace/POSIX_Asynch_IO.h"
@@ -483,7 +484,7 @@ protected:
   /// The purpose of this member is only to identify asynchronous request
   /// from NotifyManager. We will reserve for it always slot 0
   /// in the list of aiocb's to be sure that don't lose notifications.
-  ACE_HANDLE notify_pipe_read_handle_ ;
+  ACE_Atomic_Op<ACE_SYNCH_MUTEX, ACE_HANDLE> notify_pipe_read_handle_;
 
   /// Number of ACE_POSIX_Asynch_Result's waiting for start
   /// i.e. deferred AIOs

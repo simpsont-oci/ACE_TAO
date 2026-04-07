@@ -47,11 +47,14 @@ ACE_Uring_Proactor::~ACE_Uring_Proactor (void)
 int
 ACE_Uring_Proactor::close (void)
 {
-  if (this->is_initialized_)
-    {
-      ::io_uring_queue_exit (&this->ring_);
-      this->is_initialized_ = false;
-    }
+  ACE_GUARD_RETURN (ACE_Thread_Mutex, sq_guard, this->sq_mutex_, -1);
+  ACE_GUARD_RETURN (ACE_Thread_Mutex, cq_guard, this->cq_mutex_, -1);
+
+  if (!this->is_initialized_)
+    return 0;
+
+  this->is_initialized_ = false;
+  ::io_uring_queue_exit (&this->ring_);
   return 0;
 }
 
@@ -106,6 +109,8 @@ ACE_Uring_Proactor::get_handle (void) const
 int
 ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait_time)
 {
+  ACE_GUARD_RETURN (ACE_Thread_Mutex, dispatch_guard, this->dispatch_mutex_, -1);
+
   if (!this->is_initialized_)
     return -1;
 
@@ -117,15 +122,17 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
 
   while (processed < max_to_process)
     {
+      struct io_uring_cqe *cqe = 0;
       ACE_Uring_Asynch_Result *result = 0;
+      ACE_Uring_Asynch_Operation *owner = 0;
+      ACE_Handler *handler = 0;
       size_t bytes_transferred = 0;
       int error = 0;
       int ret = 0;
       bool should_wait = (processed == 0);
 
       {
-        ACE_GUARD (ACE_Thread_Mutex, guard, this->cq_mutex_);
-        struct io_uring_cqe *cqe = 0;
+        ACE_GUARD_RETURN (ACE_Thread_Mutex, guard, this->cq_mutex_, -1);
 
         if (should_wait)
           {
@@ -166,19 +173,26 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
         result =
           static_cast<ACE_Uring_Asynch_Result *> (io_uring_cqe_get_data (cqe));
 
+        error = (cqe->res < 0) ? -cqe->res : 0;
+        bytes_transferred = (cqe->res > 0) ? cqe->res : 0;
+      }
+
+      {
+        ACE_GUARD_RETURN (ACE_Thread_Mutex, sq_guard, this->sq_mutex_, -1);
+
         if (result != 0)
           {
-            const void *handler = result->handler ();
+            handler = result->dispatch_handler ();
             if (handler != 0
                 && dispatched_handlers.find (handler) != dispatched_handlers.end ())
               return processed;
 
-            if (result->owner () != 0)
-              result->owner ()->unregister_result (result);
+            owner = result->owner ();
+            if (owner != 0)
+              owner->unregister_result (result);
           }
 
-        error = (cqe->res < 0) ? -cqe->res : 0;
-        bytes_transferred = (cqe->res > 0) ? cqe->res : 0;
+        ACE_GUARD_RETURN (ACE_Thread_Mutex, cq_guard, this->cq_mutex_, -1);
         ::io_uring_cqe_seen (&this->ring_, cqe);
       }
 
@@ -186,7 +200,6 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
 
       if (result != 0)
         {
-          ACE_Handler *handler = result->handler ();
           if (handler != 0)
             dispatched_handlers.insert (handler);
 
@@ -206,21 +219,33 @@ ACE_Uring_Proactor::sq_mutex (void)
   return this->sq_mutex_;
 }
 
+bool
+ACE_Uring_Proactor::is_initialized (void) const
+{
+  return this->is_initialized_;
+}
+
 struct io_uring_sqe *
 ACE_Uring_Proactor::get_sqe (void)
 {
+  if (!this->is_initialized_)
+    return 0;
   return ::io_uring_get_sqe (&this->ring_);
 }
 
 int
 ACE_Uring_Proactor::submit_sqe (void)
 {
+  if (!this->is_initialized_)
+    return -1;
   return ::io_uring_submit (&this->ring_);
 }
 
 int
 ACE_Uring_Proactor::submit_pending_sqe (void)
 {
+  if (!this->is_initialized_)
+    return -1;
   if (::io_uring_sq_ready (&this->ring_) == 0)
     return 0;
 
@@ -432,7 +457,7 @@ ACE_Uring_Proactor::create_asynch_timer (const ACE_Handler::Proxy_Ptr &handler_p
 int
 ACE_Uring_Proactor::post_wakeup_completions (int count)
 {
-  ACE_GUARD (ACE_Thread_Mutex, guard, this->sq_mutex_);
+  ACE_GUARD_RETURN (ACE_Thread_Mutex, guard, this->sq_mutex_, -1);
   for (int i = 0; i < count; ++i)
     {
       struct io_uring_sqe *sqe = ::io_uring_get_sqe (&this->ring_);

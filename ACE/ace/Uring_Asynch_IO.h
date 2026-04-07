@@ -23,6 +23,7 @@
 #if defined (ACE_HAS_AIO_CALLS) && defined (ACE_HAS_IO_URING)
 
 #include "ace/Asynch_IO_Impl.h"
+#include "ace/Atomic_Op.h"
 #include "ace/Guard_T.h"
 #include "ace/Time_Value.h"
 #include "ace/Uring_Proactor.h"
@@ -76,11 +77,13 @@ public:
   virtual int post_completion (ACE_Proactor_Impl *proactor);
 
   ACE_Handler *handler (void) const;
+  ACE_Handler *dispatch_handler (void) const;
 
   void owner (ACE_Uring_Asynch_Operation *operation);
   ACE_Uring_Asynch_Operation *owner (void) const;
 
 protected:
+  ACE_Handler *handler_;
   ACE_Handler::Proxy_Ptr handler_proxy_;
   const void *act_;
   ACE_HANDLE handle_;
@@ -89,7 +92,7 @@ protected:
   ACE_Proactor *proactor_;
   size_t bytes_transferred_;
   u_long error_;
-  ACE_Uring_Asynch_Operation *owner_;
+  ACE_Atomic_Op<ACE_Thread_Mutex, ACE_Uring_Asynch_Operation *> owner_;
 };
 
 /**
@@ -130,6 +133,7 @@ public:
 
   virtual int cancel (void);
   virtual ACE_Proactor *proactor (void) const;
+  ACE_Handler *handler (void);
 
   int submit_result (ACE_Uring_Asynch_Result *result);
   void register_result (ACE_Uring_Asynch_Result *result);

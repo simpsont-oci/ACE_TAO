@@ -7,7 +7,8 @@ ACE_BEGIN_VERSIONED_NAMESPACE_DECL
 
 ACE_Asynch_Pseudo_Task::ACE_Asynch_Pseudo_Task ()
   : select_reactor_ (),               // should be initialized before reactor_
-    reactor_ (&select_reactor_, 0)    // don't delete implementation
+    reactor_ (&select_reactor_, 0),   // don't delete implementation
+    started_ (0)
 {
 }
 
@@ -19,19 +20,26 @@ ACE_Asynch_Pseudo_Task::~ACE_Asynch_Pseudo_Task ()
 int
 ACE_Asynch_Pseudo_Task::start (void)
 {
+  if (this->started_.value () != 0)
+    return 0;
+
   if (this->reactor_.initialized () == 0)
     ACELIB_ERROR_RETURN ((LM_ERROR,
                        ACE_TEXT ("%N:%l:%p\n"),
                        ACE_TEXT ("start reactor is not initialized")),
                        -1);
 
-  return this->activate () == -1 ? -1 : 0;   // If started, return 0
+  if (this->activate () == -1)
+    return -1;
+
+  this->started_ = 1;
+  return 0;
 }
 
 int
 ACE_Asynch_Pseudo_Task::stop (void)
 {
-  if (this->thr_count () == 0)  // already stopped
+  if (this->started_.value () == 0)  // already stopped
     return 0;
 
   if (this->reactor_.end_reactor_event_loop () == -1)
@@ -39,6 +47,7 @@ ACE_Asynch_Pseudo_Task::stop (void)
 
   this->wait ();
   this->reactor_.close ();
+  this->started_ = 0;
   return 0;
 }
 

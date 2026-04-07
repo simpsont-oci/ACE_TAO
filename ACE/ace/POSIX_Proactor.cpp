@@ -102,6 +102,12 @@ ACE_POSIX_Proactor::~ACE_POSIX_Proactor (void)
 int
 ACE_POSIX_Proactor::close (void)
 {
+  if (this->pseudo_task_ != 0)
+    {
+      delete this->pseudo_task_;
+      this->pseudo_task_ = 0;
+    }
+
   return 0;
 }
 
@@ -836,7 +842,7 @@ ACE_POSIX_AIOCB_Proactor::close (void)
 
 void ACE_POSIX_AIOCB_Proactor::set_notify_handle (ACE_HANDLE h)
 {
-  notify_pipe_read_handle_ = h;
+  this->notify_pipe_read_handle_ = h;
 }
 
 int ACE_POSIX_AIOCB_Proactor::create_result_aiocb_list (void)
@@ -1427,11 +1433,12 @@ ssize_t
 ACE_POSIX_AIOCB_Proactor::allocate_aio_slot (ACE_POSIX_Asynch_Result *result)
 {
   size_t i = 0;
+  const ACE_HANDLE notify_pipe_read_handle = this->notify_pipe_read_handle_.value ();
 
   // we reserve zero slot for ACE_AIOCB_Notify_Pipe_Manager
   // so make check for ACE_AIOCB_Notify_Pipe_Manager request
 
-  if (notify_pipe_read_handle_ == result->aio_fildes) // Notify_Pipe ?
+  if (notify_pipe_read_handle == result->aio_fildes) // Notify_Pipe ?
     {                                       // should be free,
       if (result_list_[i] != 0)           // only 1 request
         {                                   // is allowed

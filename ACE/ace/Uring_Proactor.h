@@ -186,6 +186,7 @@ public:
 
   /// Serialize SQE preparation and submission.
   ACE_Thread_Mutex &sq_mutex (void);
+  bool is_initialized (void) const;
 
   /// Access to the underlying ring for operation implementations.
   struct io_uring_sqe *get_sqe (void);
@@ -199,6 +200,7 @@ protected:
 private:
   struct io_uring ring_;
   bool is_initialized_;
+  mutable ACE_Thread_Mutex dispatch_mutex_;
   mutable ACE_Thread_Mutex sq_mutex_;
   mutable ACE_Thread_Mutex cq_mutex_;
 };

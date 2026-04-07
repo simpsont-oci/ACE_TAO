@@ -243,7 +243,9 @@ namespace
 
     handler.stop_dispatching ();
 
-    if (!immediate_shutdown && !handler.wait_for_idle (ACE_Time_Value (10)))
+    const bool reached_idle = handler.wait_for_idle (ACE_Time_Value (10));
+
+    if (!immediate_shutdown && !reached_idle)
       {
         task.stop ();
         ACE_ERROR_RETURN ((LM_ERROR,

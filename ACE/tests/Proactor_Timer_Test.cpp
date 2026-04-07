@@ -157,7 +157,6 @@ Repeat_Timer_Handler::handle_time_out (const ACE_Time_Value &, const void *)
                       ACE_TEXT ("Repeater cancel timer: %d; should be 1\n"),
                       canceled));
         }
-      delete this;
     }
   else
     {
@@ -279,7 +278,7 @@ test_cancel_repeat_timer (void)
   if (-1 == ACE_Proactor::instance ()->proactor_run_event_loop (test_timer))
     ACE_ERROR ((LM_ERROR, ACE_TEXT ("%p\n"), ACE_TEXT ("proactor loop fail")));
 
-  // handler should be deleted by its own handle_time_out().
+  delete handler;
   return;
 }
 
