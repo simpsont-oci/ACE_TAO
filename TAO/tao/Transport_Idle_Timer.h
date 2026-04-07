@@ -2,7 +2,7 @@
  *  @file    Transport_Idle_Timer.h
  *
  * Reactor timer that fires when a transport has been idle for the
- * configured transport_idl_timeout period and triggers auto-close.
+ * configured transport idle timeout period and triggers auto-close.
  *
  *  @author  Johnny Willemsen
  */
