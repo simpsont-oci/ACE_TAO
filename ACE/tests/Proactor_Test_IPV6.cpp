@@ -1835,11 +1835,15 @@ run_main (int argc, ACE_TCHAR *argv[])
 
   MyTask    task1;
   TestData  test;
+  Acceptor *acceptor = 0;
+  Connector *connector = 0;
+  int started = 0;
 
   if (task1.start (threads, proactor_type, max_aio_operations) == 0)
     {
-      Acceptor  acceptor (&test);
-      Connector connector (&test);
+      started = 1;
+      ACE_NEW_RETURN (acceptor, Acceptor (&test), -1);
+      ACE_NEW_RETURN (connector, Connector (&test), -1);
       ACE_INET_Addr addr (port, "::");
 
       int rc = 0;
@@ -1847,7 +1851,7 @@ run_main (int argc, ACE_TCHAR *argv[])
       if (both != 0 || host == 0) // Acceptor
         {
           // Simplify, initial read with zero size
-          if (acceptor.open (addr, 0, 1) == 0)
+          if (acceptor->open (addr, 0, 1) == 0)
             rc = 1;
         }
 
@@ -1859,24 +1863,39 @@ run_main (int argc, ACE_TCHAR *argv[])
           if (addr.set (port, host, 1, addr.get_type ()) == -1)
             ACE_ERROR ((LM_ERROR, ACE_TEXT ("%p\n"), host));
           else
-            rc += connector.start (addr, clients);
+            rc += connector->start (addr, clients);
         }
 
-      // Wait a few seconds to let things get going, then poll til
-      // all sessions are done. Note that when we exit this scope, the
-      // Acceptor and Connector will be destroyed, which should prevent
-      // further connections and also test how well destroyed handlers
-      // are handled.
+      // Let the sessions get going, then wait for them to drain while
+      // the acceptor and connector are still alive. Destroying them
+      // earlier leaves callbacks racing with stack lifetime.
       ACE_OS::sleep (3);
-    }
-  ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("(%t) Sleeping til sessions run down.\n")));
-  while (!test.testing_done ())
-    ACE_OS::sleep (1);
 
-  test.stop_all ();
+      ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("(%t) Sleeping til sessions run down.\n")));
+      while (!test.testing_done ())
+        ACE_OS::sleep (1);
+
+      test.stop_all ();
+
+      if (acceptor != 0)
+        acceptor->cancel ();
+      if (connector != 0)
+        connector->cancel ();
+      ACE_OS::sleep (1);
+    }
+
+  if (started)
+    {
+      // Let canceled accept/connect completions drain before stopping
+      // the proactor thread.
+      ACE_OS::sleep (1);
+    }
 
   ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("(%t) Stop Thread Pool Task\n")));
   task1.stop ();
+
+  delete connector;
+  delete acceptor;
 
 #endif /* ACE_HAS_IPV6 */
 

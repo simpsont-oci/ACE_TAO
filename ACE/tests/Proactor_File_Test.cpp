@@ -385,26 +385,28 @@ run_main(int argc, ACE_TCHAR *argv[])
     }
 
   int rc = 0;
-  FileIOHandler fileIOHandler;
-
-  // Initialize the serial port handler
-  if (0 != fileIOHandler.Connect())
   {
-    rc = 1;
-  }
-  else
-  {
-    ACE_DEBUG((LM_INFO, ACE_TEXT(" File I/O Handler connected.\n")));
+    FileIOHandler fileIOHandler;
 
-    // start the repeating timer for data transmission
+    // Initialize the serial port handler
+    if (0 != fileIOHandler.Connect())
+      {
+        rc = 1;
+      }
+    else
+      {
+        ACE_DEBUG((LM_INFO, ACE_TEXT(" File I/O Handler connected.\n")));
 
-    ACE_Time_Value repeatTime(0, 50000); // 0.05 second time interval
-    ACE_Proactor::instance()->schedule_repeating_timer(fileIOHandler,
-                                                       (void *) (100),
-                                                       repeatTime);
+        // start the repeating timer for data transmission
 
-    // Run the Proactor
-    ACE_Proactor::instance()->proactor_run_event_loop();
+        ACE_Time_Value repeatTime(0, 50000); // 0.05 second time interval
+        ACE_Proactor::instance()->schedule_repeating_timer(fileIOHandler,
+                                                           (void *) (100),
+                                                           repeatTime);
+
+        // Run the Proactor
+        ACE_Proactor::instance()->proactor_run_event_loop();
+      }
   }
 
   ACE_Proactor::close_singleton ();

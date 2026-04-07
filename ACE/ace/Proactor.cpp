@@ -87,6 +87,9 @@ protected:
 
   /// Flag used to indicate when we are shutting down.
   int shutting_down_;
+
+  /// Serialize access to the shutdown flag between destroy() and svc().
+  ACE_Thread_Mutex shutting_down_lock_;
 };
 
 ACE_Proactor_Timer_Handler::ACE_Proactor_Timer_Handler (ACE_Proactor &proactor)
@@ -104,8 +107,10 @@ ACE_Proactor_Timer_Handler::~ACE_Proactor_Timer_Handler (void)
 int
 ACE_Proactor_Timer_Handler::destroy (void)
 {
-  // Mark for closing down.
-  this->shutting_down_ = 1;
+  {
+    ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->shutting_down_lock_, -1);
+    this->shutting_down_ = 1;
+  }
 
   // Signal timer event.
   this->timer_event_.signal ();
@@ -126,9 +131,18 @@ ACE_Proactor_Timer_Handler::svc (void)
 {
   ACE_Time_Value relative_time;
   int result = 0;
+  int shutting_down = 0;
 
-  while (this->shutting_down_ == 0)
+  for (;;)
     {
+      {
+        ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->shutting_down_lock_, -1);
+        shutting_down = this->shutting_down_;
+      }
+
+      if (shutting_down != 0)
+        break;
+
       ACE_Time_Value *wait_time =
         this->proactor_.timer_queue ()->calculate_timeout (0,
                                                            &relative_time);
@@ -412,6 +426,11 @@ ACE_Proactor::close_singleton (void)
       delete ACE_Proactor::proactor_;
       ACE_Proactor::proactor_ = 0;
       ACE_Proactor::delete_proactor_ = false;
+
+      ACE_Framework_Repository *repository =
+        ACE_Framework_Repository::instance ();
+      if (repository != 0)
+        repository->remove_component (ACE_Proactor::name ());
     }
 }
 
@@ -445,12 +464,11 @@ ACE_Proactor::proactor_run_event_loop (PROACTOR_EVENT_HOOK eh)
 {
   ACE_TRACE ("ACE_Proactor::proactor_run_event_loop");
   int result = 0;
+  int end_event_loop = 0;
 
   {
     ACE_MT (ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, mutex_, -1));
 
-    // Early check. It is ok to do this without lock, since we care just
-    // whether it is zero or non-zero.
     if (this->end_event_loop_ != 0)
       return 0;
 
@@ -461,9 +479,12 @@ ACE_Proactor::proactor_run_event_loop (PROACTOR_EVENT_HOOK eh)
   // Run the event loop.
   for (;;)
     {
-      // Check the end loop flag. It is ok to do this without lock,
-      // since we care just whether it is zero or non-zero.
-      if (this->end_event_loop_ != 0)
+      {
+        ACE_MT (ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, mutex_, -1));
+        end_event_loop = this->end_event_loop_;
+      }
+
+      if (end_event_loop != 0)
         break;
 
       // <end_event_loop> is not set. Ready to do <handle_events>.
@@ -501,12 +522,11 @@ ACE_Proactor::proactor_run_event_loop (ACE_Time_Value &tv,
 {
   ACE_TRACE ("ACE_Proactor::proactor_run_event_loop");
   int result = 0;
+  int end_event_loop = 0;
 
   {
     ACE_MT (ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, mutex_, -1));
 
-    // Early check. It is ok to do this without lock, since we care just
-    // whether it is zero or non-zero.
     if (this->end_event_loop_ != 0
        || tv == ACE_Time_Value::zero)
       return 0;
@@ -518,9 +538,12 @@ ACE_Proactor::proactor_run_event_loop (ACE_Time_Value &tv,
   // Run the event loop.
   for (;;)
     {
-      // Check the end loop flag. It is ok to do this without lock,
-      // since we care just whether it is zero or non-zero.
-      if (this->end_event_loop_ != 0)
+      {
+        ACE_MT (ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, mutex_, -1));
+        end_event_loop = this->end_event_loop_;
+      }
+
+      if (end_event_loop != 0)
         break;
 
       // <end_event_loop> is not set. Ready to do <handle_events>.
