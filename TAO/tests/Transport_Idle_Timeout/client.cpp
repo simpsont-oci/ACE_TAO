@@ -139,7 +139,7 @@ tc1_basic_idle_close (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
   bool ok = true;
 
   // --- Step 1: establish a transport ---
-  ok &= echo->ping (0, 1, Test::Echo::_nil (), 0, 0);
+  ok &= echo->ping (0, 1, Test::Echo::_nil (), 0, 0, 0);
 
   ok &= check ("TC-1 after ping (expect 1)", cache_size(orb), 1);
 
@@ -171,7 +171,7 @@ tc2_reconnect (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
 
   // A new ping must succeed without TRANSIENT even though TC-1 caused the
   // server to close the connection.  TAO's reconnect logic handles this.
-  ok &= echo->ping (0, 1, Test::Echo::_nil (), 0, 0);
+  ok &= echo->ping (0, 1, Test::Echo::_nil (), 0, 0, 0);
 
   ok &= check ("TC-2 after reconnect ping (expect 1)", cache_size(orb), 1);
 
@@ -199,7 +199,7 @@ tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
   // Rapid-fire loop — transport reused each time
   for (int i = 0; i < loop_count; ++i)
     {
-      ok &= echo->ping (0, 1, Test::Echo::_nil (), 0, 0);
+      ok &= echo->ping (0, 1, Test::Echo::_nil (), 0, 0, 0);
     }
 
   // Immediately after the loop the transport returned to idle and the
@@ -238,7 +238,7 @@ tc4_disabled_timeout (CORBA::ORB_ptr orb, Test::Echo_ptr echo)
   ACE_DEBUG ((LM_INFO, ACE_TEXT ("\n=== TC-4: Disabled timeout ===\n")));
   bool ok = true;
 
-  ok &= echo->ping (0, 1, Test::Echo::_nil (), 0, 0);
+  ok &= echo->ping (0, 1, Test::Echo::_nil (), 0, 0, 0);
 
   ok &= check ("TC-4 after ping (expect 1)", cache_size(orb), 1);
 

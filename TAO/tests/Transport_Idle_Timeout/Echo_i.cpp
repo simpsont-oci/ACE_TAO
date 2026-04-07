@@ -15,8 +15,7 @@
 void
 sleep_with_reactor (CORBA::ORB_ptr orb, int seconds)
 {
-  ACE_Time_Value deadline =
-      ACE_OS::gettimeofday () + ACE_Time_Value (seconds);
+  ACE_Time_Value const deadline = ACE_OS::gettimeofday () + ACE_Time_Value (seconds);
 
   while (ACE_OS::gettimeofday () < deadline)
     {
@@ -38,12 +37,12 @@ check (const char *label, size_t got, size_t expected)
   if (got == expected)
     {
       ACE_DEBUG ((LM_INFO,
-                  ACE_TEXT ("  [PASS] %C : cache_size = %B (expected %B)\n"),
+                  ACE_TEXT ("(%P|%t)  [PASS] %C: cache_size = %B (expected %B)\n"),
                   label, got, expected));
       return true;
     }
   ACE_ERROR ((LM_ERROR,
-              ACE_TEXT ("  [FAIL] %C : cache_size = %B (expected %B)\n"),
+              ACE_TEXT ("(%P|%t)  [FAIL] %C: cache_size = %B (expected %B)\n"),
               label, got, expected));
   return false;
 }
@@ -54,26 +53,24 @@ Echo_i::Echo_i (CORBA::ORB_ptr orb)
 }
 
 bool
-Echo_i::ping (::CORBA::Long sleep_time, ::CORBA::Long cache_size_expected, ::Test::Echo_ptr server, ::CORBA::Long sleep_time_server, ::CORBA::Long cache_size_expected2)
+Echo_i::ping (::CORBA::Long sleep_time, ::CORBA::Long cache_size_expected, ::Test::Echo_ptr server, ::CORBA::Long sleep_time_server, ::CORBA::Long cache_size_expected_in_server1, ::CORBA::Long cache_size_expected_in_server2)
 {
-  if (TAO_debug_level > 0)
-    ACE_DEBUG ((LM_DEBUG,
-                ACE_TEXT ("(%P|%t) Echo_i::ping, sleep time (%d), cache size expected (%d)\n"), sleep_time, cache_size_expected));
+  ACE_DEBUG ((LM_DEBUG,
+              ACE_TEXT ("(%P|%t) Echo_i::ping, sleep time (%d), cache size expected (%d)\n"), sleep_time, cache_size_expected));
 
   bool ok = true;
   sleep_with_reactor (this->orb_, sleep_time);
 
   if (!CORBA::is_nil(server))
   {
-    if (TAO_debug_level > 0)
-      ACE_DEBUG ((LM_DEBUG,
-                  ACE_TEXT ("(%P|%t) Echo_i::ping, pinging second server\n")));
-    ok &= server->ping (sleep_time_server, 1, Test::Echo::_nil(), 0, 1);
+    ACE_DEBUG ((LM_DEBUG,
+                ACE_TEXT ("(%P|%t) Echo_i::ping, pinging second server with sleep %d\n"), sleep_time_server));
+    ok &= server->ping (sleep_time_server, cache_size_expected_in_server2, Test::Echo::_nil(), 0, 1, 0);
     if (sleep_time_server > 0)
       {
         sleep_with_reactor (this->orb_, sleep_time_server);
       }
-    ok &= check ("ping_second", cache_size(this->orb_), cache_size_expected2);
+    ok &= check ("ping_second", cache_size(this->orb_), cache_size_expected_in_server1);
   }
   else
   {

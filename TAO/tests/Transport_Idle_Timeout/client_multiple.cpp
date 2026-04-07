@@ -74,12 +74,12 @@ check (const char *label, size_t got, size_t expected)
   if (got == expected)
     {
       ACE_DEBUG ((LM_INFO,
-                  ACE_TEXT ("  [PASS] %C : cache_size = %B (expected %B)\n"),
+                  ACE_TEXT ("(%P|%t)  [PASS] %C : cache_size = %B (expected %B)\n"),
                   label, got, expected));
       return true;
     }
   ACE_ERROR ((LM_ERROR,
-              ACE_TEXT ("  [FAIL] %C : cache_size = %B (expected %B)\n"),
+              ACE_TEXT ("(%P|%t)  [FAIL] %C : cache_size = %B (expected %B)\n"),
               label, got, expected));
   return false;
 }
@@ -141,7 +141,7 @@ tc1_basic_idle_close (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_ptr ec
   bool ok = true;
 
   // --- Step 1: establish a transport ---
-  ok &= echo->ping (0, 2, echo2, 0, 2);
+  ok &= echo->ping (0, 2, echo2, 0, 2, 1);
 
   ok &= check ("TC-1 after ping (expect 1)", cache_size(orb), 1);
 
@@ -159,10 +159,14 @@ tc1_basic_idle_close (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_ptr ec
 
   // Make another call, but let wait sleep_sec after the ping to the second server,
   // which means the call takes longer as the idle time.
-  // at that moment the cache should be 1, this means the call takes longer as the idle time,
-  ok &= echo->ping (0, 2, echo2, sleep_sec, 1);
+  ok &= echo->ping (0, 2, echo2, sleep_sec, 0, 0);
 
   ok &= check ("TC-1 after ping longer as timeout (expect 1)", cache_size(orb), 1);
+
+  sleep_with_reactor (orb, sleep_sec);
+
+    // --- Step 4: cache must be empty now ---
+  ok &= check ("TC-1 after second idle timeout (expect 0)", cache_size(orb), 0);
 
   return ok;
 }
@@ -182,7 +186,7 @@ tc2_reconnect (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_ptr echo2)
 
   // A new ping must succeed without TRANSIENT even though TC-1 caused the
   // server to close the connection.  TAO's reconnect logic handles this.
-  ok &= echo->ping (0, 2, echo2, 0, 2);
+  ok &= echo->ping (0, 2, echo2, 0, 2, 1);
 
   ok &= check ("TC-2 after reconnect ping (expect 1)", cache_size(orb), 1);
 
@@ -210,7 +214,7 @@ tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_p
   // Rapid-fire loop — transport reused each time
   for (int i = 0; i < loop_count; ++i)
     {
-      ok &= echo->ping (0, 2, echo2, 0, 2);
+      ok &= echo->ping (0, 2, echo2, 0, 2, 1);
     }
 
   // Immediately after the loop the transport returned to idle and the
@@ -249,7 +253,7 @@ tc4_disabled_timeout (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_ptr ec
   ACE_DEBUG ((LM_INFO, ACE_TEXT ("\n=== TC-4: Disabled timeout ===\n")));
   bool ok = true;
 
-  ok &= echo->ping (0, 2, echo2, 0, 1);
+  ok &= echo->ping (0, 2, echo2, 0, 1, 1);
 
   ok &= check ("TC-4 after ping (expect 1)", cache_size(orb), 1);
 

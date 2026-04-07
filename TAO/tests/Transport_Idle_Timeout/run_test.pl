@@ -47,12 +47,12 @@ sub run_scenario {
 
     my $SV = $server->CreateProcess (
         "server",
-        "-ORBdebuglevel $debug_level -ORBSvcConf $svc_conf -o $server_ior"
+        "-ORBdebuglevel $debug_level -ORBVerboseLogging 1 -ORBSvcConf $svc_conf -o $server_ior"
     );
 
     my $CL = $client->CreateProcess (
         "client",
-        "-ORBdebuglevel $cdebug_level -ORBSvcConf $svc_conf -k file://$client_ior -t $timeout_sec $extra_client_args"
+        "-ORBdebuglevel $cdebug_level -ORBVerboseLogging 1 -ORBSvcConf $svc_conf -k file://$client_ior -t $timeout_sec $extra_client_args"
     );
 
     # Start server
@@ -127,16 +127,16 @@ sub run_multiple_scenario {
 
     my $SV1 = $server1->CreateProcess (
         "server",
-        "-ORBdebuglevel $debug_level -ORBSvcConf $svc_conf -o $server1_ior"
+        "-ORBdebuglevel $debug_level -ORBVerboseLogging 1 -ORBSvcConf $svc_conf -o $server1_ior"
     );
     my $SV2 = $server2->CreateProcess (
         "server",
-        "-ORBdebuglevel $debug_level -ORBSvcConf $svc_conf -o $server2_ior"
+        "-ORBdebuglevel $debug_level -ORBVerboseLogging 1 -ORBSvcConf $svc_conf -o $server2_ior"
     );
 
     my $CL = $client->CreateProcess (
         "client_multiple",
-        "-ORBdebuglevel $cdebug_level -ORBSvcConf $svc_conf -k file://$client1_ior -l file://$client2_ior -t $timeout_sec $extra_client_args"
+        "-ORBdebuglevel $cdebug_level -ORBVerboseLogging 1 -ORBSvcConf $svc_conf -k file://$client1_ior -l file://$client2_ior -t $timeout_sec $extra_client_args"
     );
 
     # Start server 1
