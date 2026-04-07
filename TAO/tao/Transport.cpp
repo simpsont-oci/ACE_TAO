@@ -2948,16 +2948,19 @@ TAO_Transport::schedule_idle_timer ()
   if (timeout_sec > 0)
     {
       ACE_Reactor *reactor = this->orb_core_->reactor ();
-      const ACE_Time_Value tv (static_cast<time_t> (timeout_sec));
-      this->idle_timer_id_= reactor->schedule_timer (std::addressof(this->transport_idle_timer_), nullptr, tv);
-
-      if (TAO_debug_level > 6)
+      if (reactor)
         {
-          TAOLIB_DEBUG ((LM_DEBUG,
-                  ACE_TEXT ("TAO (%P|%t) - Transport[%d]::schedule_idle_timer, ")
-                  ACE_TEXT ("schedule idle timer with id [%d] ")
-                  ACE_TEXT ("in the reactor.\n"),
-                  this->id (), this->idle_timer_id_));
+          ACE_Time_Value const tv (static_cast<time_t> (timeout_sec));
+          this->idle_timer_id_= reactor->schedule_timer (std::addressof(this->transport_idle_timer_), nullptr, tv);
+
+          if (TAO_debug_level > 6)
+            {
+              TAOLIB_DEBUG ((LM_DEBUG,
+                      ACE_TEXT ("TAO (%P|%t) - Transport[%d]::schedule_idle_timer, ")
+                      ACE_TEXT ("schedule idle timer with id [%d] ")
+                      ACE_TEXT ("in the reactor.\n"),
+                      this->id (), this->idle_timer_id_));
+            }
         }
     }
 }
