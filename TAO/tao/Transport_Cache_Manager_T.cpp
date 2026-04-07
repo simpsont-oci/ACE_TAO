@@ -280,16 +280,16 @@ namespace TAO
 
     // Make a temporary object. It does not do a copy.
     Cache_ExtId key (prop);
-    HASH_MAP_ENTRY *entry = 0;
+    HASH_MAP_ENTRY *entry = nullptr;
     busy_count = 0;
     int cache_status = 0;
-    HASH_MAP_ENTRY *found_entry = 0;
+    HASH_MAP_ENTRY *found_entry = nullptr;
 
     // loop until we find a usable transport, or until we've checked
     // all cached entries for this endpoint
     while (found != CACHE_FOUND_AVAILABLE && cache_status == 0)
       {
-        entry = 0;
+        entry = nullptr;
         cache_status = this->cache_map_.find (key, entry);
         if (cache_status == 0 && entry)
           {
@@ -356,7 +356,7 @@ namespace TAO
         // Bump the index up
         key.incr_index ();
       }
-    if (found_entry != 0)
+    if (found_entry)
     {
       transport = found_entry->item ().transport ();
       transport->add_reference ();
