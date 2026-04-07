@@ -64,7 +64,7 @@ using MMAP_Allocator = ACE_Malloc_T<ACE_MMAP_Memory_Pool, ACE_Null_Mutex, ACE_PI
 
 // Check that the ACE_Based_Pointer_Repository can be accessed
 // from a Windows DLL
-// (see http://bugzilla.dre.vanderbilt.edu/show_bug.cgi?id=1991)
+// (see https://github.com/DOCGroup/bugzilla/issues/1991)
 int singleton_test ()
 {
     void* baddr1 = ACE_BASED_POINTER_REPOSITORY::instance();
@@ -207,7 +207,7 @@ mmap_map_test()
 // into the Based_Pointer_Repository
 // (i.e. maps based on backing stores that are already
 //  present in the filesystem)
-// (see http://bugzilla.dre.vanderbilt.edu/show_bug.cgi?id=2216)
+// (see https://github.com/DOCGroup/bugzilla/issues/2216)
 int
 mmap_persistent_map_test()
 {
@@ -274,7 +274,7 @@ mmap_persistent_map_test()
 // (i.e. when a segment is resized it may move its base address
 // because the OS cannot fit the new segment size at the same
 // base address, in this case the Repository must be updated)
-// (see http://bugzilla.dre.vanderbilt.edu/show_bug.cgi?id=2218)
+// (see https://github.com/DOCGroup/bugzilla/issues/2218)
 int
 mmap_remap_test()
 {
