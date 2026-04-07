@@ -98,10 +98,10 @@ namespace TAO
     if (entry != nullptr)
       {
         entry->item ().recycle_state (state);
-        if (state != ENTRY_UNKNOWN && state != ENTRY_CONNECTING
-            && entry->item ().transport ())
-          entry->item ().is_connected (
-            entry->item ().transport ()->is_connected ());
+        if (state != ENTRY_UNKNOWN && state != ENTRY_CONNECTING && entry->item ().transport ())
+          {
+            entry->item ().is_connected (entry->item ().transport ()->is_connected ());
+          }
       }
   }
 
@@ -122,7 +122,7 @@ namespace TAO
        }
 
     // Get the entry too
-    HASH_MAP_ENTRY *entry = 0;
+    HASH_MAP_ENTRY *entry = nullptr;
 
     // Update the purging strategy information while we
     // are holding our lock
