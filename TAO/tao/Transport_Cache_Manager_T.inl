@@ -39,9 +39,9 @@ namespace TAO
   {
     int retval = 0;
 
-    if (entry != 0)
+    if (entry)
     {
-      HASH_MAP_ENTRY* cached_entry = 0;
+      HASH_MAP_ENTRY* cached_entry = nullptr;
       ACE_MT (ACE_GUARD_RETURN (ACE_Lock, guard, *this->cache_lock_, -1));
       if (entry != 0) // in case someone beat us to it (entry is reference to transport member)
       {
@@ -50,7 +50,7 @@ namespace TAO
         // it's destruction.  And the transport can not be holding a cache map entry if
         // that happens.
         cached_entry = entry;
-        entry = 0;
+        entry = nullptr;
 
         // now it's save to really purge the entry
         retval = this->purge_entry_i (cached_entry);
@@ -66,11 +66,11 @@ namespace TAO
   {
     int retval = 0;
 
-    if (entry != 0)
+    if (entry)
     {
-      HASH_MAP_ENTRY* cached_entry = 0;
+      HASH_MAP_ENTRY* cached_entry = nullptr;
       ACE_MT (ACE_GUARD_RETURN (ACE_Lock, guard, *this->cache_lock_, -1));
-      if (entry != 0) // in case someone beat us to it (entry is reference to transport member)
+      if (entry) // in case someone beat us to it (entry is reference to transport member)
       {
         // Only purge the entry when it is purgable
         if (this->is_entry_purgable_i (*entry))
@@ -80,7 +80,7 @@ namespace TAO
             // it's destruction.  And the transport can not be holding a cache map entry if
             // that happens.
             cached_entry = entry;
-            entry = 0;
+            entry = nullptr;
 
             // now it's save to really purge the entry
             retval = this->purge_entry_i (cached_entry);
@@ -117,7 +117,7 @@ namespace TAO
   Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::make_idle (HASH_MAP_ENTRY *&entry)
   {
     ACE_MT (ACE_GUARD_RETURN (ACE_Lock, guard, *this->cache_lock_, -1));
-    if (entry == 0) // in case someone beat us to it (entry is reference to transport member)
+    if (!entry) // in case someone beat us to it (entry is reference to transport member)
       return -1;
 
     return this->make_idle_i (entry);
