@@ -204,6 +204,8 @@ TAO_Transport::~TAO_Transport (void)
                   ));
     }
 
+  this->cancel_idle_timer ();
+
   delete this->messaging_object_;
 
   delete this->ws_;
@@ -593,7 +595,12 @@ TAO_Transport::make_idle (void)
                   this->id ()));
     }
 
-  return this->transport_cache_manager ().make_idle (this->cache_map_entry_);
+  int const result = this->transport_cache_manager ().make_idle (this->cache_map_entry_);
+  if (result == 0)
+    {
+       this->schedule_idle_timer ();
+    }
+  return result;
 }
 
 int
@@ -998,6 +1005,46 @@ TAO_Transport::handle_timeout (const ACE_Time_Value & /* current_time */,
             return -1;
           }
         }
+    }
+
+  return 0;
+}
+
+int
+TAO_Transport::handle_idle_timeout (const ACE_Time_Value & /* current_time */, const void */*act*/)
+{
+  if (TAO_debug_level > 6)
+    {
+      TAOLIB_DEBUG ((LM_DEBUG,
+         ACE_TEXT ("TAO (%P|%t) - Transport[%d]::handle_idle_timeout, ")
+         ACE_TEXT ("idle timer expired, closing transport\n"),
+         this->id ()));
+    }
+
+  // Timer has expired, so setting the idle timer id back to -1
+  this->idle_timer_id_ = -1;
+
+  if (this->transport_cache_manager ().purge_entry_when_purgable (this->cache_map_entry_) == -1)
+    {
+      if (TAO_debug_level > 6)
+        TAOLIB_DEBUG ((LM_DEBUG,
+            ACE_TEXT ("TAO (%P|%t) - Transport[%d]::handle_idle_timeout, ")
+            ACE_TEXT ("idle_timeout, transport is not purgable, don't close it, reschedule it\n"),
+            this->id ()));
+
+      this->schedule_idle_timer ();
+    }
+  else
+    {
+      if (TAO_debug_level > 6)
+        TAOLIB_DEBUG ((LM_DEBUG,
+            ACE_TEXT ("TAO (%P|%t) - Transport[%d]::handle_idle_timeout, ")
+            ACE_TEXT ("idle_timeout, transport purged due to idle timeout\n"),
+            this->id ()));
+
+      // Close the underlying socket.
+      // close_connection() is safe to call from the reactor thread.
+      (void) this->close_connection ();
     }
 
   return 0;
