@@ -98,10 +98,10 @@ namespace TAO
     if (entry != 0)
       {
         entry->item ().recycle_state (state);
-        if (state != ENTRY_UNKNOWN && state != ENTRY_CONNECTING
-            && entry->item ().transport ())
-          entry->item ().is_connected (
-            entry->item ().transport ()->is_connected ());
+        if (state != ENTRY_UNKNOWN && state != ENTRY_CONNECTING && entry->item ().transport ())
+          {
+            entry->item ().is_connected (entry->item ().transport ()->is_connected ());
+          }
       }
   }
 
@@ -300,6 +300,9 @@ namespace TAO
                 found = CACHE_FOUND_AVAILABLE;
                 found_entry = entry;
                 entry->item ().recycle_state (ENTRY_BUSY);
+                // We found a transport we can use, so cancel its idle timer
+                // with the lock held
+                entry->item().transport ()->cancel_idle_timer ();
 
                 if (TAO_debug_level > 6)
                   {
@@ -356,7 +359,7 @@ namespace TAO
         // Bump the index up
         key.incr_index ();
       }
-    if (found_entry != 0)
+    if (found_entry)
     {
       transport = found_entry->item ().transport ();
       transport->add_reference ();
@@ -441,7 +444,9 @@ namespace TAO
         // Do not mark the entry as closed if we don't have a
         // blockable handler added
         if (retval)
-          (*iter).int_id_.recycle_state (ENTRY_CLOSED);
+          {
+            (*iter).int_id_.recycle_state (ENTRY_CLOSED);
+          }
       }
 
     return true;
@@ -512,8 +517,7 @@ namespace TAO
 
   template <typename TT, typename TRDT, typename PSTRAT>
   bool
-  Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::
-    is_entry_connecting_i (const HASH_MAP_ENTRY &entry)
+  Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::is_entry_connecting_i (const HASH_MAP_ENTRY &entry)
   {
     Cache_Entries_State entry_state = entry.int_id_.recycle_state ();
     bool result = (entry_state == ENTRY_CONNECTING);
@@ -541,8 +545,7 @@ namespace TAO
 #if !defined (ACE_LACKS_QSORT)
   template <typename TT, typename TRDT, typename PSTRAT>
   int
-  Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::
-    cpscmp(const void* a, const void* b)
+  Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::cpscmp(const void* a, const void* b)
   {
     const HASH_MAP_ENTRY **left  = (const HASH_MAP_ENTRY **) const_cast<void *> (a);
     const HASH_MAP_ENTRY **right = (const HASH_MAP_ENTRY **) const_cast<void *> (b);
@@ -598,8 +601,7 @@ namespace TAO
             {
               if (this->is_entry_purgable_i (*sorted_set[i]))
                 {
-                  transport_type* transport =
-                    sorted_set[i]->int_id_.transport ();
+                  transport_type* transport = sorted_set[i]->int_id_.transport ();
                   sorted_set[i]->int_id_.recycle_state (ENTRY_BUSY);
                   transport->add_reference ();
 
@@ -638,7 +640,7 @@ namespace TAO
     }
 
     // Now, without the lock held, lets go through and close all the transports.
-    if (! transports_to_be_closed.is_empty ())
+    if (!transports_to_be_closed.is_empty ())
       {
         typename transport_set_type::iterator it (transports_to_be_closed);
         while (! it.done ())
