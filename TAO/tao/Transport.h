@@ -1,6 +1,3 @@
-// -*- C++ -*-
-
-//=============================================================================
 /**
  *  @file Transport.h
  *
@@ -9,7 +6,6 @@
  *
  *  @author  Fred Kuhns <fredk@cs.wustl.edu>
  */
-//=============================================================================
 
 #ifndef TAO_TRANSPORT_H
 #define TAO_TRANSPORT_H
@@ -23,6 +19,7 @@
 #endif /* ACE_LACKS_PRAGMA_ONCE */
 
 #include "tao/Transport_Timer.h"
+#include "tao/Transport_Idle_Timer.h"
 #include "tao/Incoming_Message_Queue.h"
 #include "tao/Incoming_Message_Stack.h"
 #include "tao/Message_Semantics.h"
@@ -853,6 +850,9 @@ public:
    */
   int handle_timeout (const ACE_Time_Value &current_time, const void* act);
 
+  /// Timeout called when the idle timer expired for this transport
+  int handle_idle_timeout (const ACE_Time_Value &current_time, const void* act);
+
   /// Accessor to recv_buffer_size_
   size_t recv_buffer_size () const;
 
@@ -895,6 +895,9 @@ public:
 
   /// Transport statistics
   TAO::Transport::Stats* stats () const;
+
+  /// Helper method to cancel the timer when the transport is not idle anymore
+  void cancel_idle_timer ();
 
 private:
   /// Helper method that returns the Transport Cache Manager.
@@ -1058,10 +1061,8 @@ private:
    */
   bool using_blocking_io_for_asynch_messages() const;
 
-  /*
-   * Specialization hook to add concrete private methods from
-   * TAO's protocol implementation onto the base Transport class
-   */
+  /// Helper method to schedule a timer when the transport is made idle
+  void schedule_idle_timer ();
 
 protected:
   /// IOP protocol tag.
@@ -1120,10 +1121,16 @@ protected:
   ACE_Time_Value current_deadline_;
 
   /// The timer ID
-  long flush_timer_id_;
+  long flush_timer_id_ { -1 };
+
+  /// The idle timer ID
+  long idle_timer_id_ { -1 };
 
   /// The adapter used to receive timeout callbacks from the Reactor
-  TAO_Transport_Timer transport_timer_;
+  TAO::Transport_Timer transport_timer_;
+
+  /// The adapter used to receive idle timeout callbacks from the Reactor
+  TAO::Transport_Idle_Timer transport_idle_timer_;
 
   /// Lock that insures that activities that *might* use handler-related
   /// resources (such as a connection handler) get serialized.

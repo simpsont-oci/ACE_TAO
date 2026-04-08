@@ -1388,6 +1388,12 @@ example</a> of how this is used in TAO.</p>
         to your config.h file.
         </td>
       </tr>
+      <tr>
+        <td><code>-ORBTransportIdleTimeout</code> <em>number</em></td>
+        <td>Number of seconds after which idle connections are closed and purged from
+        the transport cache. By default idle connections are kept until they are
+        explicitly closed or purged because the transport cache is almost full.</td>
+      </tr>
     </tbody>
   </table>
   </p>
