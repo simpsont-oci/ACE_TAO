@@ -1317,6 +1317,10 @@ ACE_POSIX_AIOCB_Proactor::find_completed_aio (int &error_status,
   // parameter index defines initial slot to scan
   // parameter count tells us how many slots should we scan
 
+  if (this->get_impl_type () != ACE_POSIX_Proactor::PROACTOR_CB
+      && this->ensure_notify_manager () != 0)
+    return 0;
+
   ACE_MT (ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->mutex_, 0));
 
   ACE_POSIX_Asynch_Result *asynch_result = 0;
@@ -1610,6 +1614,11 @@ ACE_POSIX_AIOCB_Proactor::cancel_aio (ACE_HANDLE handle)
   // later on return from ::aio_suspend
 
   ACE_TRACE ("ACE_POSIX_AIOCB_Proactor::cancel_aio");
+
+  if (this->get_impl_type () != ACE_POSIX_Proactor::PROACTOR_CB
+      && this->aiocb_notify_pipe_manager_ == 0
+      && this->ensure_notify_manager () != 0)
+    return -1;
 
   int    num_total     = 0;
   int    num_cancelled = 0;

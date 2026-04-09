@@ -1973,7 +1973,8 @@ print_usage (int /* argc */, ACE_TCHAR *argv[])
 static int
 set_proactor_type (const ACE_TCHAR *ptype)
 {
-  return Proactor_Test_Backend::parse_type (ptype, proactor_type) == 0;
+  return Proactor_Test_Backend::parse_type (ptype, proactor_type) == 0
+    && Proactor_Test_Backend::is_available (proactor_type) != 0;
 }
 
 static int
