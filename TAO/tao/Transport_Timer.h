@@ -41,7 +41,7 @@ namespace TAO
 
     /// Receive timeout events from the Reactor and forward them to the
     /// TAO_Transport
-    int handle_timeout (const ACE_Time_Value &current_time, const void *act) override;
+    virtual int handle_timeout (const ACE_Time_Value &current_time, const void *act);
   private:
     /// The Adaptee
     TAO_Transport *transport_;

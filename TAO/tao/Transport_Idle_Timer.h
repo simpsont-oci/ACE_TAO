@@ -38,17 +38,10 @@ namespace TAO
   {
   public:
     explicit Transport_Idle_Timer (TAO_Transport *transport);
-    ~Transport_Idle_Timer () override = default;
 
     /// Reactor callback — close the transport if still idle.
-    int handle_timeout (const ACE_Time_Value &current_time,
-                        const void *act = 0) override;
-
-    Transport_Idle_Timer () = delete;
-    Transport_Idle_Timer (const Transport_Idle_Timer &) = delete;
-    Transport_Idle_Timer &operator= (const Transport_Idle_Timer &) = delete;
-    Transport_Idle_Timer (Transport_Idle_Timer &&) = delete;
-    Transport_Idle_Timer &operator= (Transport_Idle_Timer &&) = delete;
+    virtual int handle_timeout (const ACE_Time_Value &current_time,
+                        const void *act = 0);
 
   private:
     /// Transport this idle timer works on
