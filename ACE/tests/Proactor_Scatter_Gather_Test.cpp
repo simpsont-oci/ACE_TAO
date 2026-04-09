@@ -874,7 +874,15 @@ Writer::handle_write_file (const ACE_Asynch_Write_File::Result &result)
     {
       if (0 != this->odd_chain_ || 0 != this->even_chain_)
         {
-          this->initiate_write_file ();
+          if (this->initiate_write_file () != 0)
+            {
+              ACE_DEBUG ((LM_DEBUG,
+                          ACE_TEXT ("Writer::handle_write_file")
+                          ACE_TEXT (" - ending proactor event loop after final flush failure\n")));
+
+              ACE_Proactor::instance ()->end_event_loop ();
+              delete this;
+            }
           return;
         }
 
@@ -1322,6 +1330,7 @@ print_usage (int /* argc */, ACE_TCHAR *argv[])
       ACE_TEXT ("\n-s server only (receiver-writer)")
       ACE_TEXT ("\n-h host to connect to")
       ACE_TEXT ("\n-p port")
+      ACE_TEXT ("\n-t <backend> select proactor backend")
       ACE_TEXT ("\n-u show this message")
       ACE_TEXT ("\n"),
       argv[0]

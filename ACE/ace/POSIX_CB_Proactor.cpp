@@ -9,11 +9,39 @@
 
 ACE_BEGIN_VERSIONED_NAMESPACE_DECL
 
+ACE_POSIX_CB_Proactor::Notification_State::Notification_State (ACE_SYNCH_SEMAPHORE &sema)
+  : sema_ (&sema),
+    pending_callbacks_ (0)
+{
+}
+
+void
+ACE_POSIX_CB_Proactor::Notification_State::add_pending (void)
+{
+  ++this->pending_callbacks_;
+}
+
+void
+ACE_POSIX_CB_Proactor::Notification_State::complete_one (void)
+{
+  this->sema_->release ();
+  --this->pending_callbacks_;
+}
+
+long
+ACE_POSIX_CB_Proactor::Notification_State::pending (void) const
+{
+  return this->pending_callbacks_.value ();
+}
+
 ACE_POSIX_CB_Proactor::ACE_POSIX_CB_Proactor (size_t max_aio_operations)
   : ACE_POSIX_AIOCB_Proactor (max_aio_operations,
                               ACE_POSIX_Proactor::PROACTOR_CB),
-    sema_ ((unsigned int) 0)
+    sema_ ((unsigned int) 0),
+    notification_state_ (0)
 {
+  ACE_NEW (this->notification_state_, Notification_State (this->sema_));
+
   // we should start pseudo-asynchronous accept task
   // one per all future acceptors
 
@@ -34,9 +62,10 @@ ACE_POSIX_CB_Proactor::get_impl_type (void)
 
 void ACE_POSIX_CB_Proactor::aio_completion_func (sigval cb_data)
 {
-  ACE_POSIX_CB_Proactor * impl = static_cast<ACE_POSIX_CB_Proactor *> (cb_data.sival_ptr);
-  if ( impl != 0 )
-    impl->notify_completion (0);
+  Notification_State *state =
+    static_cast<Notification_State *> (cb_data.sival_ptr);
+  if (state != 0)
+    state->complete_one ();
 }
 
 #if defined (ACE_HAS_SIG_C_FUNC)
@@ -46,6 +75,32 @@ ACE_POSIX_CB_Proactor_aio_completion (sigval cb_data)
   ACE_POSIX_CB_Proactor::aio_completion_func (cb_data);
 }
 #endif /* ACE_HAS_SIG_C_FUNC */
+
+int
+ACE_POSIX_CB_Proactor::close (void)
+{
+  const int result = ACE_POSIX_AIOCB_Proactor::close ();
+
+  Notification_State *state = this->notification_state_;
+  if (state != 0)
+    {
+      const ACE_Time_Value settle_interval (0, 10000);
+      const size_t max_settle_attempts = 50;
+
+      for (size_t attempt = 0;
+           state->pending () > 0 && attempt < max_settle_attempts;
+           ++attempt)
+        ACE_OS::sleep (settle_interval);
+
+      if (state->pending () == 0)
+        {
+          delete state;
+          this->notification_state_ = 0;
+        }
+    }
+
+  return result;
+}
 
 int
 ACE_POSIX_CB_Proactor::handle_events (ACE_Time_Value &wait_time)
@@ -69,6 +124,14 @@ ACE_POSIX_CB_Proactor::notify_completion (int sig_num)
   return this->sema_.release();
 }
 
+int
+ACE_POSIX_CB_Proactor::post_completion (ACE_POSIX_Asynch_Result *result)
+{
+  ACE_MT (ACE_GUARD_RETURN (ACE_SYNCH_MUTEX, ace_mon, this->mutex_, -1));
+
+  return this->putq_result (result);
+}
+
 
 ssize_t
 ACE_POSIX_CB_Proactor::allocate_aio_slot (ACE_POSIX_Asynch_Result *result)
@@ -90,7 +153,7 @@ ACE_POSIX_CB_Proactor::allocate_aio_slot (ACE_POSIX_Asynch_Result *result)
 #  endif /* ACE_HAS_SIG_C_FUNC */
   result->aio_sigevent.sigev_notify_attributes = 0;
 
-  result->aio_sigevent.sigev_value.sival_ptr = this ;
+  result->aio_sigevent.sigev_value.sival_ptr = this->notification_state_;
 
   return slot;
 }
@@ -167,6 +230,71 @@ ACE_POSIX_CB_Proactor::handle_events_i (u_long milli_seconds)
   //             ret_aio, ret_que));
 
   return ret_aio + ret_que > 0 ? 1 : 0;
+}
+
+int
+ACE_POSIX_CB_Proactor::start_aio (ACE_POSIX_Asynch_Result *result,
+                                  ACE_POSIX_Proactor::Opcode op)
+{
+  ACE_MT (ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->mutex_, -1));
+
+  int ret_val = (aiocb_list_cur_size_ >= aiocb_list_max_size_) ? -1 : 0;
+
+  if (result == 0)
+    return ret_val;
+
+  switch (op)
+    {
+    case ACE_POSIX_Proactor::ACE_OPCODE_READ:
+      result->aio_lio_opcode = LIO_READ;
+      break;
+
+    case ACE_POSIX_Proactor::ACE_OPCODE_WRITE:
+      result->aio_lio_opcode = LIO_WRITE;
+      break;
+
+    default:
+      ACELIB_ERROR_RETURN ((LM_ERROR,
+                         ACE_TEXT ("%N:%l:(%P|%t)::")
+                         ACE_TEXT ("start_aio: Invalid op code %d\n"),
+                         op),
+                        -1);
+    }
+
+  if (ret_val != 0)
+    {
+      errno = EAGAIN;
+      return -1;
+    }
+
+  const ssize_t slot = this->allocate_aio_slot (result);
+  if (slot < 0)
+    return -1;
+
+  const size_t index = static_cast<size_t> (slot);
+  this->result_list_[index] = result;
+  ++this->aiocb_list_cur_size_;
+
+  ret_val = this->start_aio_i (result);
+  switch (ret_val)
+    {
+    case 0:
+      this->aiocb_list_[index] = result;
+      if (this->notification_state_ != 0)
+        this->notification_state_->add_pending ();
+      return 0;
+
+    case 1:
+      ++this->num_deferred_aiocb_;
+      return 0;
+
+    default:
+      break;
+    }
+
+  this->result_list_[index] = 0;
+  --this->aiocb_list_cur_size_;
+  return -1;
 }
 
 ACE_END_VERSIONED_NAMESPACE_DECL

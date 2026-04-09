@@ -240,11 +240,14 @@ ACE_Uring_Asynch_Operation::cancel (void)
   ACE_GUARD_RETURN (ACE_Thread_Mutex, sq_mon, this->uring_proactor_->sq_mutex (), -1);
   ACE_GUARD_RETURN (ACE_Thread_Mutex, pending_mon, this->pending_results_lock_, -1);
 
-  if (this->pending_results_.empty ())
+  if (this->pending_results_.is_empty ())
     return 1;
 
-  for (std::set<ACE_Uring_Asynch_Result *>::const_iterator i = this->pending_results_.begin ();
-       i != this->pending_results_.end ();
+  ACE_Unbounded_Set<ACE_Uring_Asynch_Result *>::iterator const the_end =
+    this->pending_results_.end ();
+  for (ACE_Unbounded_Set<ACE_Uring_Asynch_Result *>::iterator i =
+         this->pending_results_.begin ();
+       i != the_end;
        ++i)
     {
       struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
@@ -283,6 +286,23 @@ ACE_Uring_Asynch_Operation::handler (void)
 }
 
 int
+ACE_Uring_Asynch_Operation::queue_result (ACE_Uring_Asynch_Result *result)
+{
+  this->register_result (result);
+
+  int submit_result = this->uring_proactor_->submit_sqe_if_necessary ();
+  if (submit_result < 0)
+    {
+      errno = -submit_result;
+      this->unregister_result (result);
+      delete result;
+      return -1;
+    }
+
+  return 0;
+}
+
+int
 ACE_Uring_Asynch_Operation::submit_result (ACE_Uring_Asynch_Result *result)
 {
   this->register_result (result);
@@ -317,7 +337,7 @@ ACE_Uring_Asynch_Operation::unregister_result (ACE_Uring_Asynch_Result *result)
     return;
 
   ACE_GUARD (ACE_Thread_Mutex, ace_mon, this->pending_results_lock_);
-  this->pending_results_.erase (result);
+  this->pending_results_.remove (result);
   result->owner (0);
 }
 
@@ -424,7 +444,7 @@ ACE_Uring_Asynch_Read_Stream::read (ACE_Message_Block &message_block,
                         (unsigned int) num_bytes_to_read,
                         0);
   ::io_uring_sqe_set_data (sqe, result);
-  return this->submit_result (result);
+  return this->queue_result (result);
 }
 
 ACE_Uring_Asynch_Read_File::ACE_Uring_Asynch_Read_File
@@ -474,7 +494,7 @@ ACE_Uring_Asynch_Read_File::read (ACE_Message_Block &message_block,
                         (unsigned int) num_bytes_to_read,
                         full_offset);
   ::io_uring_sqe_set_data (sqe, result);
-  return this->submit_result (result);
+  return this->queue_result (result);
 }
 
 int
@@ -514,7 +534,7 @@ ACE_Uring_Asynch_Read_File::read (ACE_Message_Block &message_block,
                         (unsigned int) num_bytes_to_read,
                         0);
   ::io_uring_sqe_set_data (sqe, result);
-  return this->submit_result (result);
+  return this->queue_result (result);
 }
 
 ACE_Uring_Asynch_Read_File_Result::ACE_Uring_Asynch_Read_File_Result
@@ -660,7 +680,7 @@ ACE_Uring_Asynch_Write_Stream::write (ACE_Message_Block &message_block,
                          (unsigned int) bytes_to_write,
                          0);
   ::io_uring_sqe_set_data (sqe, result);
-  return this->submit_result (result);
+  return this->queue_result (result);
 }
 
 ACE_Uring_Asynch_Write_File::ACE_Uring_Asynch_Write_File
@@ -710,7 +730,7 @@ ACE_Uring_Asynch_Write_File::write (ACE_Message_Block &message_block,
                          (unsigned int) bytes_to_write,
                          full_offset);
   ::io_uring_sqe_set_data (sqe, result);
-  return this->submit_result (result);
+  return this->queue_result (result);
 }
 
 int
@@ -750,7 +770,7 @@ ACE_Uring_Asynch_Write_File::write (ACE_Message_Block &message_block,
                          (unsigned int) bytes_to_write,
                          0);
   ::io_uring_sqe_set_data (sqe, result);
-  return this->submit_result (result);
+  return this->queue_result (result);
 }
 
 ACE_Uring_Asynch_Write_File_Result::ACE_Uring_Asynch_Write_File_Result
@@ -976,7 +996,7 @@ int ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle, const ACE_Addr
         {
           result->set_error (errno);
           ACELIB_ERROR ((LM_ERROR,
-                         ACE_TEXT("ACE_POSIX_Asynch_Connect::connect_i: %p\n"),
+                         ACE_TEXT("ACE_Uring_Asynch_Connect::connect_i: %p\n"),
                          ACE_TEXT("socket")));
         }
       else
@@ -993,7 +1013,7 @@ int ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle, const ACE_Addr
             {
               result->set_error (errno);
               ACELIB_ERROR ((LM_ERROR,
-                             ACE_TEXT("ACE_POSIX_Asynch_Connect::connect_i: %p\n"),
+                             ACE_TEXT("ACE_Uring_Asynch_Connect::connect_i: %p\n"),
                              ACE_TEXT("setsockopt")));
             }
         }
@@ -1008,7 +1028,7 @@ int ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle, const ACE_Addr
         {
            result->set_error (errno);
            ACELIB_ERROR ((LM_ERROR,
-                          ACE_TEXT("ACE_POSIX_Asynch_Connect::connect_i: %p\n"),
+                          ACE_TEXT("ACE_Uring_Asynch_Connect::connect_i: %p\n"),
                           ACE_TEXT("bind")));
         }
     }
@@ -1018,7 +1038,7 @@ int ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle, const ACE_Addr
     {
       result->set_error (errno);
       ACELIB_ERROR ((LM_ERROR,
-                     ACE_TEXT("ACE_POSIX_Asynch_Connect::connect_i: %p\n")
+                     ACE_TEXT("ACE_Uring_Asynch_Connect::connect_i: %p\n")
                      ACE_TEXT("set_flags")));
     }
 
@@ -1142,9 +1162,10 @@ ssize_t ACE_Uring_Asynch_Read_Dgram::recv (ACE_Message_Block *message_block, siz
 }
 
 ACE_Uring_Asynch_Write_Dgram_Result::ACE_Uring_Asynch_Write_Dgram_Result (const ACE_Handler::Proxy_Ptr &handler_proxy, ACE_HANDLE handle, ACE_Message_Block *message_block, size_t bytes_to_write, int flags, const void *act, ACE_Proactor *proactor)
-  : ACE_Uring_Asynch_Result (handler_proxy, act, handle, 0, 0, proactor), message_block_ (message_block), bytes_to_write_ (bytes_to_write), flags_ (flags)
+  : ACE_Uring_Asynch_Result (handler_proxy, act, handle, 0, 0, proactor), message_block_ (message_block), bytes_to_write_ (bytes_to_write), flags_ (flags), remote_addr_len_ (0)
 {
   ACE_OS::memset (&this->msg_, 0, sizeof (this->msg_));
+  ACE_OS::memset (&this->remote_addr_, 0, sizeof (this->remote_addr_));
   this->iov_.iov_base = message_block->rd_ptr ();
   this->iov_.iov_len = (unsigned int)bytes_to_write;
   this->msg_.msg_iov = &this->iov_;
@@ -1191,6 +1212,24 @@ ACE_Uring_Asynch_Write_Dgram_Result::msg (void)
   return &this->msg_;
 }
 
+int
+ACE_Uring_Asynch_Write_Dgram_Result::remote_address (const ACE_Addr &addr)
+{
+  if (addr.get_addr () == 0
+      || addr.get_size () == 0
+      || addr.get_size () > sizeof (this->remote_addr_))
+    {
+      errno = EINVAL;
+      return -1;
+    }
+
+  ACE_OS::memcpy (&this->remote_addr_, addr.get_addr (), addr.get_size ());
+  this->remote_addr_len_ = static_cast<socklen_t> (addr.get_size ());
+  this->msg_.msg_name = &this->remote_addr_;
+  this->msg_.msg_namelen = this->remote_addr_len_;
+  return 0;
+}
+
 ACE_Uring_Asynch_Write_Dgram::ACE_Uring_Asynch_Write_Dgram (ACE_Uring_Proactor *proactor)
   : ACE_Uring_Asynch_Operation (proactor) {}
 
@@ -1198,8 +1237,11 @@ ssize_t ACE_Uring_Asynch_Write_Dgram::send (ACE_Message_Block *message_block, si
 {
   ACE_Uring_Asynch_Write_Dgram_Result *result = 0;
   ACE_NEW_RETURN (result, ACE_Uring_Asynch_Write_Dgram_Result (this->handler_proxy_, this->handle_, message_block, message_block->length (), flags, act, this->proactor_), -1);
-  result->msg ()->msg_name = (void *)remote_addr.get_addr ();
-  result->msg ()->msg_namelen = (socklen_t)remote_addr.get_size ();
+  if (result->remote_address (remote_addr) != 0)
+    {
+      delete result;
+      return -1;
+    }
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
   struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();

@@ -15,12 +15,11 @@
 #include "ace/Log_Category.h"
 #include "ace/OS_NS_errno.h"
 #include "ace/OS_NS_sys_time.h"
-#include <set>
-
 ACE_BEGIN_VERSIONED_NAMESPACE_DECL
 
 ACE_Uring_Proactor::ACE_Uring_Proactor (size_t entries)
-  : is_initialized_ (false)
+  : ring_ ()
+  , is_initialized_ (false)
 {
   ACE_TRACE ("ACE_Uring_Proactor::ACE_Uring_Proactor");
 
@@ -68,13 +67,15 @@ int
 ACE_Uring_Proactor::handle_events (ACE_Time_Value &wait_time)
 {
   ACE_Countdown_Time countdown (&wait_time);
-  return this->process_cqes (32, &wait_time);
+  const int result = this->process_cqes (DEFAULT_CQE_BATCH_SIZE, &wait_time);
+  return result > 0 ? 1 : result;
 }
 
 int
 ACE_Uring_Proactor::handle_events (void)
 {
-  return this->process_cqes (32);
+  const int result = this->process_cqes (DEFAULT_CQE_BATCH_SIZE);
+  return result > 0 ? 1 : result;
 }
 
 int
@@ -118,14 +119,23 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
     max_to_process = 1;
 
   int processed = 0;
-  std::set<const void *> dispatched_handlers;
 
   while (processed < max_to_process)
     {
+      if (processed == 0)
+        {
+          ACE_GUARD_RETURN (ACE_Thread_Mutex, sq_guard, this->sq_mutex_, -1);
+          const int submit_result = this->submit_pending_sqe ();
+          if (submit_result < 0)
+            {
+              errno = -submit_result;
+              return -1;
+            }
+        }
+
       struct io_uring_cqe *cqe = 0;
       ACE_Uring_Asynch_Result *result = 0;
       ACE_Uring_Asynch_Operation *owner = 0;
-      ACE_Handler *handler = 0;
       size_t bytes_transferred = 0;
       int error = 0;
       int ret = 0;
@@ -172,7 +182,6 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
 
         result =
           static_cast<ACE_Uring_Asynch_Result *> (io_uring_cqe_get_data (cqe));
-
         error = (cqe->res < 0) ? -cqe->res : 0;
         bytes_transferred = (cqe->res > 0) ? cqe->res : 0;
       }
@@ -182,11 +191,6 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
 
         if (result != 0)
           {
-            handler = result->dispatch_handler ();
-            if (handler != 0
-                && dispatched_handlers.find (handler) != dispatched_handlers.end ())
-              return processed;
-
             owner = result->owner ();
             if (owner != 0)
               owner->unregister_result (result);
@@ -200,12 +204,10 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
 
       if (result != 0)
         {
-          if (handler != 0)
-            dispatched_handlers.insert (handler);
-
+          // Call completion hook
           result->complete (bytes_transferred,
                             error == 0 ? 1 : 0,
-                            0,
+                            0, // No completion key
                             error);
         }
     }
@@ -238,6 +240,23 @@ ACE_Uring_Proactor::submit_sqe (void)
 {
   if (!this->is_initialized_)
     return -1;
+  return ::io_uring_submit (&this->ring_);
+}
+
+int
+ACE_Uring_Proactor::submit_sqe_if_necessary (void)
+{
+  if (!this->is_initialized_)
+    return -1;
+
+  const unsigned int ready = ::io_uring_sq_ready (&this->ring_);
+  if (ready == 0)
+    return 0;
+
+  if (ready < DEFAULT_SUBMIT_BATCH_SIZE
+      && ::io_uring_sq_space_left (&this->ring_) > 0)
+    return 0;
+
   return ::io_uring_submit (&this->ring_);
 }
 

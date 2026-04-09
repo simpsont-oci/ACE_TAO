@@ -26,9 +26,9 @@
 #include "ace/Atomic_Op.h"
 #include "ace/Guard_T.h"
 #include "ace/Time_Value.h"
+#include "ace/Unbounded_Set.h"
 #include "ace/Uring_Proactor.h"
 
-#include <set>
 #include <sys/socket.h>
 
 ACE_BEGIN_VERSIONED_NAMESPACE_DECL
@@ -135,6 +135,7 @@ public:
   virtual ACE_Proactor *proactor (void) const;
   ACE_Handler *handler (void);
 
+  int queue_result (ACE_Uring_Asynch_Result *result);
   int submit_result (ACE_Uring_Asynch_Result *result);
   void register_result (ACE_Uring_Asynch_Result *result);
   void unregister_result (ACE_Uring_Asynch_Result *result);
@@ -148,7 +149,7 @@ protected:
   ACE_Handler::Proxy_Ptr handler_proxy_;
   ACE_HANDLE handle_;
   ACE_Thread_Mutex pending_results_lock_;
-  std::set<ACE_Uring_Asynch_Result *> pending_results_;
+  ACE_Unbounded_Set<ACE_Uring_Asynch_Result *> pending_results_;
 };
 
 // ---------------------------------------------------------------------------
@@ -526,6 +527,7 @@ public:
   virtual size_t bytes_to_write (void) const;
 
   struct msghdr *msg (void);
+  int remote_address (const ACE_Addr &addr);
 
 private:
   ACE_Message_Block *message_block_;
@@ -533,6 +535,8 @@ private:
   int flags_;
   struct msghdr msg_;
   struct iovec iov_;
+  struct sockaddr_storage remote_addr_;
+  socklen_t remote_addr_len_;
 };
 
 class ACE_Export ACE_Uring_Asynch_Write_Dgram

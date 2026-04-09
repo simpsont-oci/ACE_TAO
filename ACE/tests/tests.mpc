@@ -1328,6 +1328,14 @@ project(Proactor_File Test) : acetest {
   }
 }
 
+project(Proactor Network Performance Test) : acetest {
+  avoids += ace_for_tao
+  exename = Proactor_Network_Performance_Test
+  Source_Files {
+    Proactor_Network_Performance_Test.cpp
+  }
+}
+
 project(Proactor Timer Test) : acetest {
   avoids += ace_for_tao
   exename = Proactor_Timer_Test

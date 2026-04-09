@@ -191,6 +191,7 @@ public:
   /// Access to the underlying ring for operation implementations.
   struct io_uring_sqe *get_sqe (void);
   int submit_sqe (void);
+  int submit_sqe_if_necessary (void);
   int submit_pending_sqe (void);
 
 protected:
@@ -198,6 +199,12 @@ protected:
                     const ACE_Time_Value *wait_time = 0);
 
 private:
+  enum
+  {
+    DEFAULT_CQE_BATCH_SIZE = 256,
+    DEFAULT_SUBMIT_BATCH_SIZE = 8
+  };
+
   struct io_uring ring_;
   bool is_initialized_;
   mutable ACE_Thread_Mutex dispatch_mutex_;

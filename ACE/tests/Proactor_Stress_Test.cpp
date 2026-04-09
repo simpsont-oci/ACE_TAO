@@ -176,17 +176,19 @@ namespace
   private:
     int schedule_one ()
     {
+      ACE_GUARD_RETURN (ACE_Thread_Mutex, guard, this->lock_, -1);
+      ++this->pending_;
+
       long timer_id = this->proactor_.schedule_timer (*this,
                                                       0,
                                                       ACE_Time_Value::zero);
-      ACE_GUARD_RETURN (ACE_Thread_Mutex, guard, this->lock_, -1);
       if (timer_id == -1)
         {
+          --this->pending_;
           ++this->schedule_failures_;
           return -1;
         }
 
-      ++this->pending_;
       return 0;
     }
 

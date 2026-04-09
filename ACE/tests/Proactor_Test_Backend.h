@@ -132,6 +132,60 @@ namespace Proactor_Test_Backend
   }
 
   inline int
+  is_available (Type type)
+  {
+    switch (type)
+      {
+      case BACKEND_DEFAULT:
+        return 1;
+
+      case BACKEND_WIN32:
+#if defined (ACE_WIN32) && defined (ACE_HAS_WIN32_OVERLAPPED_IO)
+        return 1;
+#else
+        return 0;
+#endif /* ACE_WIN32 && ACE_HAS_WIN32_OVERLAPPED_IO */
+
+      case BACKEND_AIOCB:
+#if defined (ACE_HAS_AIO_CALLS)
+        return 1;
+#else
+        return 0;
+#endif /* ACE_HAS_AIO_CALLS */
+
+      case BACKEND_SIG:
+#if defined (ACE_HAS_AIO_CALLS) && defined (ACE_HAS_POSIX_REALTIME_SIGNALS)
+        return 1;
+#else
+        return 0;
+#endif /* ACE_HAS_AIO_CALLS && ACE_HAS_POSIX_REALTIME_SIGNALS */
+
+      case BACKEND_SUN:
+#if defined (ACE_HAS_AIO_CALLS) && defined (sun)
+        return 1;
+#else
+        return 0;
+#endif /* ACE_HAS_AIO_CALLS && sun */
+
+      case BACKEND_CB:
+#if defined (ACE_HAS_AIO_CALLS) && !defined (ACE_HAS_BROKEN_SIGEVENT_STRUCT)
+        return 1;
+#else
+        return 0;
+#endif /* ACE_HAS_AIO_CALLS && !ACE_HAS_BROKEN_SIGEVENT_STRUCT */
+
+      case BACKEND_URING:
+#if defined (ACE_HAS_AIO_CALLS) && defined (ACE_HAS_IO_URING)
+        return 1;
+#else
+        return 0;
+#endif /* ACE_HAS_AIO_CALLS && ACE_HAS_IO_URING */
+      }
+
+    return 0;
+  }
+
+  inline int
   print_type_usage (ACE_TCHAR *argv0)
   {
     const ACE_TCHAR *sun_backend =
@@ -240,9 +294,21 @@ namespace Proactor_Test_Backend
 
       case BACKEND_URING:
 #if defined (ACE_HAS_AIO_CALLS) && defined (ACE_HAS_IO_URING)
-        ACE_NEW_RETURN (implementation,
-                        ACE_Uring_Proactor (max_aio_operations),
-                        -1);
+        {
+          ACE_Uring_Proactor *uring = 0;
+          ACE_NEW_RETURN (uring,
+                          ACE_Uring_Proactor (max_aio_operations),
+                          -1);
+          if (!uring->is_initialized ())
+            {
+              delete uring;
+              errno = ENODEV;
+              ACE_ERROR_RETURN ((LM_ERROR,
+                                 ACE_TEXT ("Failed to initialize uring proactor\n")),
+                                -1);
+            }
+          implementation = uring;
+        }
         return 0;
 #else
         return unsupported (type);
