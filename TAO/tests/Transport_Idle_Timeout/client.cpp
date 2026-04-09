@@ -104,7 +104,7 @@ static bool        disabled_tc  = false;
 static int
 parse_args (int argc, ACE_TCHAR *argv[])
 {
-  ACE_Get_Opt get_opts (argc, argv, ACE_TEXT ("k:l:t:n:d"));
+  ACE_Get_Opt get_opts (argc, argv, ACE_TEXT ("k:t:n:d"));
   int c;
   while ((c = get_opts ()) != -1)
     switch (c)
