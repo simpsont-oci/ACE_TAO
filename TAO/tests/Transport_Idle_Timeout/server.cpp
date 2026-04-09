@@ -52,7 +52,7 @@ ACE_TMAIN (int argc, ACE_TCHAR *argv[])
 
       PortableServer::POAManager_var mgr = root_poa->the_POAManager ();
 
-      Echo_i *echo_impl = nullptr;
+      Echo_i *echo_impl = 0;
       ACE_NEW_RETURN (echo_impl, Echo_i (orb.in ()), 1);
       PortableServer::ServantBase_var owner (echo_impl);
 
@@ -66,7 +66,7 @@ ACE_TMAIN (int argc, ACE_TCHAR *argv[])
 
       // Write IOR to file so the test driver and client can find it
       FILE *f = ACE_OS::fopen (ior_output_file, ACE_TEXT ("w"));
-      if (f == nullptr)
+      if (f == 0)
         ACE_ERROR_RETURN ((LM_ERROR,
                            ACE_TEXT ("Cannot open output file '%s'\n"),
                            ior_output_file), 1);

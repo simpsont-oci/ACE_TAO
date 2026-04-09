@@ -96,7 +96,7 @@ cache_size(CORBA::ORB_ptr orb)
 // Argument parsing
 // ---------------------------------------------------------------------------
 
-static const char *ior          = nullptr;
+static const char *ior          = 0;
 static int         timeout_sec  = 3;    // must match server svc.conf value
 static int         loop_count   = 10;
 static bool        disabled_tc  = false;
@@ -118,7 +118,7 @@ parse_args (int argc, ACE_TCHAR *argv[])
             ACE_TEXT ("Usage: client -k <ior> [-t <sec>] [-n <N>] [-d]\n")),
             -1);
       }
-  if (ior == nullptr)
+  if (ior == 0)
     ACE_ERROR_RETURN ((LM_ERROR,
         ACE_TEXT ("client: -k <IOR> is required\n")), -1);
   return 0;
