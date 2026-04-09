@@ -294,7 +294,7 @@ ACE_TMAIN (int argc, ACE_TCHAR *argv[])
           obj2 = orb->string_to_object (ior2);
         }
       Test::Echo_var echo = Test::Echo::_narrow (obj.in ());
-      Test::Echo_var echo2 = Test::Echo::_narrow (obj2.in ());;
+      Test::Echo_var echo2 = Test::Echo::_narrow (obj2.in ());
 
       if (CORBA::is_nil (echo.in ()))
         ACE_ERROR_RETURN ((LM_ERROR,
