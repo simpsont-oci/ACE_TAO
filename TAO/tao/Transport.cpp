@@ -2992,7 +2992,7 @@ TAO_Transport::schedule_idle_timer ()
       if (reactor)
         {
           ACE_Time_Value const tv (static_cast<time_t> (timeout_sec));
-          this->idle_timer_id_= reactor->schedule_timer (std::addressof(this->transport_idle_timer_), 0, tv);
+          this->idle_timer_id_= reactor->schedule_timer (&this->transport_idle_timer_, 0, tv);
 
           if (TAO_debug_level > 6)
             {
