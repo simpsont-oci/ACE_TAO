@@ -230,7 +230,7 @@ tc3_timer_cancel_on_reuse (CORBA::ORB_ptr orb, Test::Echo_ptr echo, Test::Echo_p
   ok &= check ("TC-3 before timeout (expect 1)", cache_size(orb), 1);
 
   // Sleep past the remainder of the timeout
-  int constexpr post_sleep = 4;
+  int const post_sleep = 4;
   ACE_DEBUG ((LM_INFO,
               ACE_TEXT ("  sleeping %d s (post-timeout)...\n"), post_sleep));
   sleep_with_reactor (orb, post_sleep);
