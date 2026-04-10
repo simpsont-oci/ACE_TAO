@@ -39,7 +39,7 @@ namespace TAO
   {
     int retval = 0;
 
-    if (entry != 0)
+    if (entry)
     {
       HASH_MAP_ENTRY* cached_entry = 0;
       ACE_MT (ACE_GUARD_RETURN (ACE_Lock, guard, *this->cache_lock_, -1));
@@ -54,6 +54,42 @@ namespace TAO
 
         // now it's save to really purge the entry
         retval = this->purge_entry_i (cached_entry);
+      }
+    }
+
+    return retval;
+  }
+
+  template <typename TT, typename TRDT, typename PSTRAT>
+  ACE_INLINE int
+  Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::purge_entry_when_purgable (HASH_MAP_ENTRY *&entry)
+  {
+    int retval = 0;
+
+    if (entry)
+    {
+      HASH_MAP_ENTRY* cached_entry = 0;
+      ACE_MT (ACE_GUARD_RETURN (ACE_Lock, guard, *this->cache_lock_, -1));
+      if (entry) // in case someone beat us to it (entry is reference to transport member)
+      {
+        // Only purge the entry when it is purgable
+        if (this->is_entry_purgable_i (*entry))
+          {
+            // Store the entry in a temporary and zero out the reference.
+            // If there is only one reference count for the transport, we will end up causing
+            // it's destruction.  And the transport can not be holding a cache map entry if
+            // that happens.
+            cached_entry = entry;
+            entry = 0;
+
+            // now it's save to really purge the entry
+            retval = this->purge_entry_i (cached_entry);
+          }
+        else
+          {
+            // Entry is not purgable at this moment
+            retval = -1;
+          }
       }
     }
 
@@ -82,7 +118,7 @@ namespace TAO
   Transport_Cache_Manager_T<TT, TRDT, PSTRAT>::make_idle (HASH_MAP_ENTRY *&entry)
   {
     ACE_MT (ACE_GUARD_RETURN (ACE_Lock, guard, *this->cache_lock_, -1));
-    if (entry == 0) // in case someone beat us to it (entry is reference to transport member)
+    if (!entry) // in case someone beat us to it (entry is reference to transport member)
       return -1;
 
     return this->make_idle_i (entry);

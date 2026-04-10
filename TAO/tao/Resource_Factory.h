@@ -255,6 +255,10 @@ public:
   /// replies during shutdown.
   virtual bool drop_replies_during_shutdown () const = 0;
 
+  /// Amount of seconds after which an idle transport will be closed
+  /// 0 means no closing of idle connections (default)
+  virtual int transport_idle_timeout () const = 0;
+
 protected:
   /**
    * Loads the default protocols. This method is used so that the
