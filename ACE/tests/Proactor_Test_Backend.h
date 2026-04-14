@@ -185,6 +185,59 @@ namespace Proactor_Test_Backend
     return 0;
   }
 
+  inline Type
+  concrete_type (Type type)
+  {
+    if (type != BACKEND_DEFAULT)
+      return type;
+
+#if defined (ACE_HAS_AIO_CALLS)
+#  if defined (ACE_POSIX_AIOCB_PROACTOR)
+    return BACKEND_AIOCB;
+#  elif defined (ACE_POSIX_SIG_PROACTOR)
+    return BACKEND_SIG;
+#  else /* Default order: CB, SIG, AIOCB */
+#    if !defined (ACE_HAS_BROKEN_SIGEVENT_STRUCT)
+    return BACKEND_CB;
+#    else
+#      if defined (ACE_HAS_POSIX_REALTIME_SIGNALS)
+    return BACKEND_SIG;
+#      else
+    return BACKEND_AIOCB;
+#      endif /* ACE_HAS_POSIX_REALTIME_SIGNALS */
+#    endif /* !ACE_HAS_BROKEN_SIGEVENT_STRUCT */
+#  endif /* ACE_POSIX_AIOCB_PROACTOR */
+#elif defined (ACE_WIN32) && defined (ACE_HAS_WIN32_OVERLAPPED_IO)
+    return BACKEND_WIN32;
+#else
+    return BACKEND_DEFAULT;
+#endif /* ACE_HAS_AIO_CALLS */
+  }
+
+  inline int
+  supports_scatter_gather (Type type)
+  {
+    switch (concrete_type (type))
+      {
+      case BACKEND_WIN32:
+#if defined (ACE_WIN32) && defined (ACE_HAS_WIN32_OVERLAPPED_IO)
+        return 1;
+#else
+        return 0;
+#endif /* ACE_WIN32 && ACE_HAS_WIN32_OVERLAPPED_IO */
+
+      case BACKEND_URING:
+#if defined (ACE_HAS_AIO_CALLS) && defined (ACE_HAS_IO_URING)
+        return 1;
+#else
+        return 0;
+#endif /* ACE_HAS_AIO_CALLS && ACE_HAS_IO_URING */
+
+      default:
+        return 0;
+      }
+  }
+
   inline int
   print_type_usage (ACE_TCHAR *argv0)
   {
@@ -240,7 +293,45 @@ namespace Proactor_Test_Backend
     switch (type)
       {
       case BACKEND_DEFAULT:
+#if defined (ACE_HAS_AIO_CALLS)
+#  if defined (ACE_POSIX_AIOCB_PROACTOR)
+        ACE_NEW_RETURN (implementation,
+                        ACE_POSIX_AIOCB_Proactor (max_aio_operations),
+                        -1);
         return 0;
+#  elif defined (ACE_POSIX_SIG_PROACTOR)
+        ACE_NEW_RETURN (implementation,
+                        ACE_POSIX_SIG_Proactor (max_aio_operations),
+                        -1);
+        return 0;
+#  else /* Default order: CB, SIG, AIOCB */
+#    if !defined (ACE_HAS_BROKEN_SIGEVENT_STRUCT)
+        ACE_NEW_RETURN (implementation,
+                        ACE_POSIX_CB_Proactor (max_aio_operations),
+                        -1);
+        return 0;
+#    else
+#      if defined (ACE_HAS_POSIX_REALTIME_SIGNALS)
+        ACE_NEW_RETURN (implementation,
+                        ACE_POSIX_SIG_Proactor (max_aio_operations),
+                        -1);
+        return 0;
+#      else
+        ACE_NEW_RETURN (implementation,
+                        ACE_POSIX_AIOCB_Proactor (max_aio_operations),
+                        -1);
+        return 0;
+#      endif /* ACE_HAS_POSIX_REALTIME_SIGNALS */
+#    endif /* !ACE_HAS_BROKEN_SIGEVENT_STRUCT */
+#  endif /* ACE_POSIX_AIOCB_PROACTOR */
+#elif defined (ACE_WIN32) && !defined (ACE_HAS_WINCE)
+        ACE_NEW_RETURN (implementation,
+                        ACE_WIN32_Proactor,
+                        -1);
+        return 0;
+#else
+        return unsupported (type);
+#endif /* ACE_HAS_AIO_CALLS */
 
       case BACKEND_WIN32:
 #if defined (ACE_WIN32) && defined (ACE_HAS_WIN32_OVERLAPPED_IO)

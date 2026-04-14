@@ -35,6 +35,7 @@
 #include "ace/Task.h"
 #include "ace/Thread_Mutex.h"
 #include "ace/Time_Value.h"
+#include "ace/os_include/os_limits.h"
 #include "ace/os_include/netinet/os_tcp.h"
 
 #include "Proactor_Test_Backend.h"
@@ -63,6 +64,8 @@ namespace
       , progress_timeout (10)
       , overall_timeout (120)
       , udp_end_markers (16)
+      , udp_receive_buffer (0)
+      , udp_send_buffer (0)
     {
     }
 
@@ -79,6 +82,8 @@ namespace
     long progress_timeout;
     long overall_timeout;
     size_t udp_end_markers;
+    size_t udp_receive_buffer;
+    size_t udp_send_buffer;
   };
 
   const ACE_UINT32 UDP_MAGIC = 0x504E5054U; // PNPT
@@ -113,6 +118,16 @@ namespace
 #endif /* ACE_WIN32 */
   }
 
+  bool
+  is_udp_peer_closed_error (u_long error)
+  {
+#if defined (ACE_WIN32)
+    return error == WSAECONNRESET;
+#else
+    return error == ECONNREFUSED;
+#endif /* ACE_WIN32 */
+  }
+
   const ACE_TCHAR *
   transport_name (Transport transport)
   {
@@ -140,7 +155,17 @@ namespace
       (static_cast<double> (delta.usec ()) / 1000000.0);
   }
 
+  int parse_size_arg (const ACE_TCHAR *text,
+                      size_t &value);
   int prepare_socket_handle (ACE_HANDLE handle);
+  int configure_udp_socket_buffer (ACE_HANDLE handle,
+                                   int option_name,
+                                   size_t requested_size,
+                                   size_t &actual_size);
+  int configure_udp_socket_buffers (ACE_HANDLE handle,
+                                    const Config &config,
+                                    size_t &actual_receive_size,
+                                    size_t &actual_send_size);
 
   class Benchmark_State
   {
@@ -162,6 +187,9 @@ namespace
       , total_received_bytes_ (0)
       , udp_data_sent_messages_ (0)
       , udp_data_received_messages_ (0)
+      , udp_socket_buffers_recorded_ (false)
+      , udp_receive_buffer_actual_ (0)
+      , udp_send_buffer_actual_ (0)
     {
       this->first_error_[0] = 0;
       this->start_time_ = time_now ();
@@ -224,6 +252,17 @@ namespace
       this->done_.broadcast ();
     }
 
+    void note_udp_socket_buffers (size_t actual_receive_size,
+                                  size_t actual_send_size)
+    {
+      ACE_GUARD (ACE_Thread_Mutex, guard, this->lock_);
+      if (this->udp_socket_buffers_recorded_)
+        return;
+      this->udp_socket_buffers_recorded_ = true;
+      this->udp_receive_buffer_actual_ = actual_receive_size;
+      this->udp_send_buffer_actual_ = actual_send_size;
+    }
+
     bool wait_for_completion (void)
     {
       const ACE_Time_Value absolute_deadline =
@@ -246,9 +285,11 @@ namespace
             this->last_progress_time_ + ACE_Time_Value (this->config_.progress_timeout);
           if (now >= progress_deadline)
             {
+              this->end_time_ = now;
+              if (this->config_.transport == TRANSPORT_UDP)
+                break;
               this->failed_ = true;
               this->stalled_ = true;
-              this->end_time_ = now;
               break;
             }
 
@@ -287,6 +328,21 @@ namespace
       const double recv_mib_per_sec = recv_mib / safe_elapsed;
       const double completions_per_sec =
         static_cast<double> (this->total_write_ops_ + this->total_read_ops_) / safe_elapsed;
+      const double avg_write_us =
+        this->total_write_ops_ == 0
+        ? 0.0
+        : (safe_elapsed * 1000000.0) / static_cast<double> (this->total_write_ops_);
+      const double avg_read_us =
+        this->total_read_ops_ == 0
+        ? 0.0
+        : (safe_elapsed * 1000000.0) / static_cast<double> (this->total_read_ops_);
+      const double avg_completion_us =
+        (this->total_write_ops_ + this->total_read_ops_) == 0
+        ? 0.0
+        : (safe_elapsed * 1000000.0)
+          / static_cast<double> (this->total_write_ops_ + this->total_read_ops_);
+      size_t lost_messages = 0;
+      double loss_pct = 0.0;
 
       ACE_DEBUG ((LM_INFO,
                   ACE_TEXT ("Benchmark config: backend=%s transport=%s family=%s sessions=%B ")
@@ -316,11 +372,11 @@ namespace
         {
           const size_t expected_data_messages =
             this->config_.sessions * this->config_.messages_per_endpoint;
-          const size_t lost_messages =
+          lost_messages =
             expected_data_messages > this->udp_data_received_messages_
             ? expected_data_messages - this->udp_data_received_messages_
             : 0;
-          const double loss_pct = expected_data_messages == 0
+          loss_pct = expected_data_messages == 0
             ? 0.0
             : (100.0 * static_cast<double> (lost_messages)
                / static_cast<double> (expected_data_messages));
@@ -331,7 +387,48 @@ namespace
                       this->udp_data_received_messages_,
                       lost_messages,
                       loss_pct));
+          ACE_DEBUG ((LM_INFO,
+                      ACE_TEXT ("UDP socket buffers: req_rcv=%B req_snd=%B actual_rcv=%B actual_snd=%B\n"),
+                      this->config_.udp_receive_buffer,
+                      this->config_.udp_send_buffer,
+                      this->udp_receive_buffer_actual_,
+                      this->udp_send_buffer_actual_));
         }
+
+      ACE_DEBUG ((LM_INFO,
+                  ACE_TEXT ("PERF_RESULT benchmark=network backend=%s transport=%s family=%s ")
+                  ACE_TEXT ("sessions=%B messages=%B payload=%B depth=%B threads=%d ")
+                  ACE_TEXT ("elapsed_sec=%.6f send_mib_per_sec=%.6f recv_mib_per_sec=%.6f ")
+                  ACE_TEXT ("completions_per_sec=%.6f avg_write_us=%.3f avg_read_us=%.3f ")
+                  ACE_TEXT ("avg_completion_us=%.3f write_ops=%B read_ops=%B sent_bytes=%B ")
+                  ACE_TEXT ("recv_bytes=%B udp_loss_pct=%.6f udp_lost=%B ")
+                  ACE_TEXT ("udp_rcvbuf_req=%B udp_sndbuf_req=%B ")
+                  ACE_TEXT ("udp_rcvbuf_actual=%B udp_sndbuf_actual=%B\n"),
+                  Proactor_Test_Backend::name (this->config_.backend),
+                  transport_name (this->config_.transport),
+                  family_name (this->config_.family),
+                  this->config_.sessions,
+                  this->config_.messages_per_endpoint,
+                  this->config_.payload_size,
+                  this->config_.write_depth,
+                  this->config_.thread_count,
+                  elapsed,
+                  send_mib_per_sec,
+                  recv_mib_per_sec,
+                  completions_per_sec,
+                  avg_write_us,
+                  avg_read_us,
+                  avg_completion_us,
+                  this->total_write_ops_,
+                  this->total_read_ops_,
+                  this->total_sent_bytes_,
+                  this->total_received_bytes_,
+                  loss_pct,
+                  lost_messages,
+                  this->config_.udp_receive_buffer,
+                  this->config_.udp_send_buffer,
+                  this->udp_receive_buffer_actual_,
+                  this->udp_send_buffer_actual_));
 
       if (this->failed_)
         {
@@ -423,6 +520,9 @@ namespace
     size_t total_received_bytes_;
     size_t udp_data_sent_messages_;
     size_t udp_data_received_messages_;
+    bool udp_socket_buffers_recorded_;
+    size_t udp_receive_buffer_actual_;
+    size_t udp_send_buffer_actual_;
   };
 
   class Proactor_Task : public ACE_Task<ACE_MT_SYNCH>
@@ -446,7 +546,17 @@ namespace
       size_t max_ops = config.max_aio_operations;
       if (max_ops == 0)
         {
-          max_ops = config.sessions * (config.write_depth + 4);
+          const size_t read_ops_per_session =
+            config.transport == TRANSPORT_TCP ? 2 : 1;
+          const size_t write_ops_per_session =
+            config.transport == TRANSPORT_TCP ? config.write_depth * 2
+                                              : config.write_depth;
+
+          // The benchmark seeds all initial endpoints before the proactor
+          // threads start, so the implicit slot budget must cover that
+          // startup burst rather than only the steady-state write depth.
+          max_ops =
+            config.sessions * (read_ops_per_session + write_ops_per_session) + 32;
           if (max_ops < 256)
             max_ops = 256;
         }
@@ -975,6 +1085,7 @@ namespace
       bool delete_self = false;
       ACE_GUARD (ACE_Recursive_Thread_Mutex, guard, this->lock_);
       ACE_Message_Block *mb = result.message_block ();
+      const bool data_message = mb->msg_type () == ACE_Message_Block::MB_DATA;
 
       if (result.error () != 0)
         {
@@ -987,8 +1098,15 @@ namespace
                                   this->peer_addr_) == 0)
                 return;
             }
+          const bool ignore_peer_closed =
+            !data_message && is_udp_peer_closed_error (result.error ());
           mb->release ();
-          if (!is_cancel_error (result.error ()))
+          if (ignore_peer_closed)
+            {
+              this->end_markers_remaining_ = 0;
+              this->sends_complete_ = true;
+            }
+          else if (!is_cancel_error (result.error ()))
             this->report_error (ACE_TEXT ("dgram write"), result.error ());
           if (this->writes_inflight_ > 0)
             --this->writes_inflight_;
@@ -1000,9 +1118,6 @@ namespace
             }
           return;
         }
-
-      bool data_message = false;
-      data_message = mb->msg_type () == ACE_Message_Block::MB_DATA;
 
       this->state_.note_write (result.bytes_transferred (), data_message);
       mb->release ();
@@ -1154,7 +1269,8 @@ namespace
     ACE_ERROR ((LM_ERROR,
                 ACE_TEXT ("Usage: %s [-t <backend>] [-u] [-4|-6] ")
                 ACE_TEXT ("[-n sessions] [-m messages] [-b payload] ")
-                ACE_TEXT ("[-w write_depth] [-T threads] [-a max_aio_ops] [-p port]\n"),
+                ACE_TEXT ("[-w write_depth] [-T threads] [-a max_aio_ops] [-p port] ")
+                ACE_TEXT ("[-R udp_rcvbuf] [-S udp_sndbuf]\n"),
                 argv0));
     ACE_ERROR ((LM_ERROR,
                 ACE_TEXT ("  default transport is tcp, default family is ipv4\n")));
@@ -1166,7 +1282,7 @@ namespace
               ACE_TCHAR *argv[],
               Config &config)
   {
-    ACE_Get_Opt get_opt (argc, argv, ACE_TEXT ("46ua:b:m:n:p:t:T:w:"));
+    ACE_Get_Opt get_opt (argc, argv, ACE_TEXT ("46uR:S:a:b:m:n:p:t:T:w:"));
     int c = 0;
 
     while ((c = get_opt ()) != EOF)
@@ -1181,6 +1297,16 @@ namespace
             break;
           case 'u':
             config.transport = TRANSPORT_UDP;
+            break;
+          case 'R':
+            if (parse_size_arg (get_opt.opt_arg (),
+                                config.udp_receive_buffer) != 0)
+              return -1;
+            break;
+          case 'S':
+            if (parse_size_arg (get_opt.opt_arg (),
+                                config.udp_send_buffer) != 0)
+              return -1;
             break;
           case 'a':
             config.max_aio_operations =
@@ -1229,6 +1355,23 @@ namespace
     if (config.transport == TRANSPORT_UDP && config.payload_size < sizeof (Udp_Header))
       return -1;
 
+    if (config.transport != TRANSPORT_UDP
+        && (config.udp_receive_buffer != 0 || config.udp_send_buffer != 0))
+      return -1;
+
+    return 0;
+  }
+
+  int
+  parse_size_arg (const ACE_TCHAR *text,
+                  size_t &value)
+  {
+    ACE_TCHAR *end = 0;
+    errno = 0;
+    const unsigned long parsed = ACE_OS::strtoul (text, &end, 10);
+    if (errno != 0 || end == text || (end != 0 && *end != 0))
+      return -1;
+    value = static_cast<size_t> (parsed);
     return 0;
   }
 
@@ -1346,6 +1489,81 @@ namespace
   }
 
   int
+  configure_udp_socket_buffer (ACE_HANDLE handle,
+                               int option_name,
+                               size_t requested_size,
+                               size_t &actual_size)
+  {
+    actual_size = 0;
+
+#if defined (ACE_LACKS_SO_RCVBUF)
+    if (option_name == SO_RCVBUF)
+      {
+        errno = ENOTSUP;
+        return -1;
+      }
+#endif /* ACE_LACKS_SO_RCVBUF */
+
+#if defined (ACE_LACKS_SO_SNDBUF)
+    if (option_name == SO_SNDBUF)
+      {
+        errno = ENOTSUP;
+        return -1;
+      }
+#endif /* ACE_LACKS_SO_SNDBUF */
+
+    if (requested_size > 0)
+      {
+        if (requested_size > static_cast<size_t> (INT_MAX))
+          {
+            errno = EINVAL;
+            return -1;
+          }
+
+        const int requested = static_cast<int> (requested_size);
+        if (ACE_OS::setsockopt (handle,
+                                SOL_SOCKET,
+                                option_name,
+                                reinterpret_cast<const char *> (&requested),
+                                sizeof (requested)) != 0)
+          return -1;
+      }
+
+    int actual = 0;
+    int actual_length = static_cast<int> (sizeof (actual));
+    if (ACE_OS::getsockopt (handle,
+                            SOL_SOCKET,
+                            option_name,
+                            reinterpret_cast<char *> (&actual),
+                            &actual_length) != 0)
+      return -1;
+
+    actual_size = actual > 0 ? static_cast<size_t> (actual) : 0;
+    return 0;
+  }
+
+  int
+  configure_udp_socket_buffers (ACE_HANDLE handle,
+                                const Config &config,
+                                size_t &actual_receive_size,
+                                size_t &actual_send_size)
+  {
+    if (configure_udp_socket_buffer (handle,
+                                     SO_RCVBUF,
+                                     config.udp_receive_buffer,
+                                     actual_receive_size) != 0)
+      return -1;
+
+    if (configure_udp_socket_buffer (handle,
+                                     SO_SNDBUF,
+                                     config.udp_send_buffer,
+                                     actual_send_size) != 0)
+      return -1;
+
+    return 0;
+  }
+
+  int
   run_udp_benchmark (const Config &config)
   {
     Proactor_Task task;
@@ -1410,7 +1628,19 @@ namespace
         server_socket.set_handle (ACE_INVALID_HANDLE);
         client_socket.set_handle (ACE_INVALID_HANDLE);
 
-        if (prepare_socket_handle (server_handle) != 0
+        size_t server_receive_buffer = 0;
+        size_t server_send_buffer = 0;
+        size_t client_receive_buffer = 0;
+        size_t client_send_buffer = 0;
+        if (configure_udp_socket_buffers (server_handle,
+                                          config,
+                                          server_receive_buffer,
+                                          server_send_buffer) != 0
+            || configure_udp_socket_buffers (client_handle,
+                                             config,
+                                             client_receive_buffer,
+                                             client_send_buffer) != 0
+            || prepare_socket_handle (server_handle) != 0
             || prepare_socket_handle (client_handle) != 0)
           {
             ACE_OS::closesocket (server_handle);
@@ -1418,9 +1648,12 @@ namespace
             task.stop ();
             ACE_ERROR_RETURN ((LM_ERROR,
                                ACE_TEXT ("%p\n"),
-                               ACE_TEXT ("set_flags")),
+                               ACE_TEXT ("udp socket setup")),
                               -1);
           }
+
+        state.note_udp_socket_buffers (server_receive_buffer,
+                                       client_send_buffer);
 
         Datagram_Endpoint *client = 0;
         Datagram_Endpoint *server = 0;
@@ -1464,14 +1697,24 @@ namespace
 int
 run_main (int argc, ACE_TCHAR *argv[])
 {
+  ACE_START_TEST (ACE_TEXT ("Proactor_Network_Performance_Test"));
+
   Config config;
   if (parse_args (argc, argv, config) != 0)
-    return print_usage (argv[0]);
+    {
+      const int rc = print_usage (argv[0]);
+      ACE_END_TEST;
+      return rc;
+    }
 
+  int rc = 0;
   if (config.transport == TRANSPORT_TCP)
-    return run_tcp_benchmark (config);
+    rc = run_tcp_benchmark (config);
+  else
+    rc = run_udp_benchmark (config);
 
-  return run_udp_benchmark (config);
+  ACE_END_TEST;
+  return rc;
 }
 
 #else
@@ -1479,8 +1722,10 @@ run_main (int argc, ACE_TCHAR *argv[])
 int
 run_main (int, ACE_TCHAR *[])
 {
+  ACE_START_TEST (ACE_TEXT ("Proactor_Network_Performance_Test"));
   ACE_ERROR ((LM_INFO,
               ACE_TEXT ("Threaded Proactor networking is not supported on this platform\n")));
+  ACE_END_TEST;
   return 0;
 }
 

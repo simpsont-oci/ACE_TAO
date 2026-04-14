@@ -964,16 +964,6 @@ int ACE_POSIX_AIOCB_Proactor::delete_result_aiocb_list (void)
         }
     }
 
-  // If it is not possible cancel some operation (num_pending > 0 ),
-  // we can do only one thing -report about this
-  // and complain about POSIX implementation.
-  // We know that we have memory leaks, but it is better than
-  // segmentation fault!
-  ACELIB_DEBUG
-    ((LM_DEBUG,
-      ACE_TEXT("ACE_POSIX_AIOCB_Proactor::delete_result_aiocb_list\n")
-      ACE_TEXT(" number pending AIO=%d\n"),
-      num_pending));
 
   delete [] this->aiocb_list_;
   this->aiocb_list_ = 0;
@@ -1037,9 +1027,6 @@ void ACE_POSIX_AIOCB_Proactor::check_max_aio_num ()
       && aiocb_list_max_size_ > (unsigned long) max_num_files)
     aiocb_list_max_size_ = (unsigned long) max_num_files;
 
-  ACELIB_DEBUG ((LM_DEBUG,
-             "(%P | %t) ACE_POSIX_AIOCB_Proactor::Max Number of AIOs=%d\n",
-              aiocb_list_max_size_));
 }
 
 void
@@ -2063,13 +2050,6 @@ ACE_POSIX_SIG_Proactor::handle_events_i (const ACE_Time_Value *timeout)
   // process post_completed results
   ret_que = this->process_result_queue ();
 
-  // Uncomment this  if you want to test
-  // and research the behavior of you system
-#if 0
-  ACELIB_DEBUG ((LM_DEBUG,
-              "(%t) NumAIO=%d NumQueue=%d\n",
-              ret_aio, ret_que));
-#endif
 
   return ret_aio + ret_que > 0 ? 1 : 0;
 }

@@ -342,7 +342,6 @@ public:
             int priority = 0,
             int signal_number = ACE_SIGRTMIN);
 
-#if defined (ACE_HAS_WIN32_OVERLAPPED_IO)
   /**
   * Same as above but with scatter support, through chaining of composite
   * message blocks using the continuation field.
@@ -352,7 +351,6 @@ public:
              const void *act = 0,
              int priority = 0,
              int signal_number = ACE_SIGRTMIN);
-#endif /* defined (ACE_HAS_WIN32_OVERLAPPED_IO) */
 
   /// Return the underlying implementation class.
   //  (this should be protected...)
@@ -497,7 +495,6 @@ public:
              int priority = 0,
              int signal_number = ACE_SIGRTMIN);
 
-#if defined (ACE_HAS_WIN32_OVERLAPPED_IO)
   /**
   * Same as above but with gather support, through chaining of composite
   * message blocks using the continuation field.
@@ -507,7 +504,6 @@ public:
               const void *act = 0,
               int priority = 0,
               int signal_number = ACE_SIGRTMIN);
-#endif /* defined (ACE_HAS_WIN32_OVERLAPPED_IO) */
 
   /// Return the underlying implementation class.
   /// @todo (this should be protected...)
@@ -641,7 +637,6 @@ public:
             int priority = 0,
             int signal_number = ACE_SIGRTMIN);
 
-#if (defined (ACE_WIN32) && !defined (ACE_HAS_WINCE))
   /**
   * Same as above but with scatter support, through chaining of composite
   * message blocks using the continuation field.
@@ -655,7 +650,6 @@ public:
              const void *act = 0,
              int priority = 0,
              int signal_number = ACE_SIGRTMIN);
-#endif /* (defined (ACE_WIN32) && !defined (ACE_HAS_WINCE)) */
 
   /// Return the underlying implementation class.
   //  (this should be protected...)
@@ -777,7 +771,6 @@ public:
              int priority = 0,
              int signal_number = ACE_SIGRTMIN);
 
-#if (defined (ACE_WIN32) && !defined (ACE_HAS_WINCE))
   /**
   * Same as above but with gather support, through chaining of composite
   * message blocks using the continuation field.
@@ -791,7 +784,6 @@ public:
               const void *act = 0,
               int priority = 0,
               int signal_number = ACE_SIGRTMIN);
-#endif /* (defined (ACE_WIN32) && !defined (ACE_HAS_WINCE)) */
 
   /// Return the underlying implementation class.
   //  (this should be protected...)

@@ -22,6 +22,15 @@
 
 namespace
 {
+  double
+  seconds_between (const ACE_Time_Value &start,
+                   const ACE_Time_Value &end)
+  {
+    const ACE_Time_Value delta = end - start;
+    return static_cast<double> (delta.sec ()) +
+      (static_cast<double> (delta.usec ()) / 1000000.0);
+  }
+
   class Proactor_Task : public ACE_Task<ACE_MT_SYNCH>
   {
   public:
@@ -215,6 +224,7 @@ namespace
   int run_recursive_test (Proactor_Test_Backend::Type backend,
                           bool immediate_shutdown)
   {
+    const ACE_Time_Value start_time = ACE_OS::gettimeofday ();
     Proactor_Task task;
     if (task.start (8, backend, 512) != 0)
       {
@@ -275,6 +285,23 @@ namespace
                            static_cast<unsigned> (handler.schedule_failures ())),
                           -1);
       }
+
+    const ACE_Time_Value end_time = ACE_OS::gettimeofday ();
+    const double elapsed = seconds_between (start_time, end_time);
+    const double safe_elapsed = elapsed > 0.0 ? elapsed : 0.000001;
+    const double callbacks_per_sec =
+      static_cast<double> (handler.call_count ()) / safe_elapsed;
+
+    ACE_DEBUG ((LM_INFO,
+                ACE_TEXT ("PERF_RESULT benchmark=stress backend=%s mode=%s ")
+                ACE_TEXT ("elapsed_sec=%.6f callbacks=%u callbacks_per_sec=%.3f ")
+                ACE_TEXT ("schedule_failures=%u\n"),
+                Proactor_Test_Backend::name (backend),
+                immediate_shutdown ? ACE_TEXT ("immediate") : ACE_TEXT ("graceful"),
+                elapsed,
+                static_cast<unsigned> (handler.call_count ()),
+                callbacks_per_sec,
+                static_cast<unsigned> (handler.schedule_failures ())));
 
     return 0;
   }

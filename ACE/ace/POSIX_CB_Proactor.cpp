@@ -223,11 +223,6 @@ ACE_POSIX_CB_Proactor::handle_events_i (u_long milli_seconds)
   // process post_completed results
   ret_que = this->process_result_queue ();
 
-  // Uncomment this  if you want to test
-  // and research the behavior of you system
-  // ACELIB_DEBUG ((LM_DEBUG,
-  //            "(%t) NumAIO=%d NumQueue=%d\n",
-  //             ret_aio, ret_que));
 
   return ret_aio + ret_que > 0 ? 1 : 0;
 }

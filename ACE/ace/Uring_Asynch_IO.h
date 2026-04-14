@@ -30,6 +30,7 @@
 #include "ace/Uring_Proactor.h"
 
 #include <sys/socket.h>
+#include <sys/uio.h>
 
 ACE_BEGIN_VERSIONED_NAMESPACE_DECL
 
@@ -173,7 +174,11 @@ public:
                                        const void *act,
                                        ACE_Proactor *proactor,
                                        u_long offset = 0,
-                                       u_long offset_high = 0);
+                                       u_long offset_high = 0,
+                                       bool vectored = false,
+                                       struct iovec *iovec = 0);
+
+  virtual ~ACE_Uring_Asynch_Read_Stream_Result (void);
 
   virtual void complete (size_t bytes_transferred,
                          int success,
@@ -187,6 +192,8 @@ public:
 protected:
   ACE_Message_Block *message_block_;
   size_t bytes_to_read_;
+  bool vectored_;
+  struct iovec *iovec_;
 };
 
 class ACE_Export ACE_Uring_Asynch_Read_Stream
@@ -201,6 +208,12 @@ public:
                     const void *act,
                     int priority,
                     int signal_number);
+
+  virtual int readv (ACE_Message_Block &message_block,
+                     size_t num_bytes_to_read,
+                     const void *act,
+                     int priority,
+                     int signal_number);
 };
 
 class ACE_Export ACE_Uring_Asynch_Read_File
@@ -223,6 +236,20 @@ public:
                     const void *act,
                     int priority,
                     int signal_number);
+
+  virtual int readv (ACE_Message_Block &message_block,
+                     size_t num_bytes_to_read,
+                     u_long offset,
+                     u_long offset_high,
+                     const void *act,
+                     int priority,
+                     int signal_number);
+
+  virtual int readv (ACE_Message_Block &message_block,
+                     size_t num_bytes_to_read,
+                     const void *act,
+                     int priority,
+                     int signal_number);
 };
 
 class ACE_Export ACE_Uring_Asynch_Read_File_Result
@@ -236,7 +263,9 @@ public:
                                      const void *act,
                                      ACE_Proactor *proactor,
                                      u_long offset = 0,
-                                     u_long offset_high = 0);
+                                     u_long offset_high = 0,
+                                     bool vectored = false,
+                                     struct iovec *iovec = 0);
 
   virtual void complete (size_t bytes_transferred,
                          int success,
@@ -266,7 +295,11 @@ public:
      const void *act,
      ACE_Proactor *proactor,
      u_long offset = 0,
-     u_long offset_high = 0);
+     u_long offset_high = 0,
+     bool vectored = false,
+     struct iovec *iovec = 0);
+
+  virtual ~ACE_Uring_Asynch_Write_Stream_Result (void);
 
   virtual void complete (size_t bytes_transferred,
                          int success,
@@ -280,6 +313,8 @@ public:
 protected:
   ACE_Message_Block *message_block_;
   size_t bytes_to_write_;
+  bool vectored_;
+  struct iovec *iovec_;
 };
 
 class ACE_Export ACE_Uring_Asynch_Write_Stream
@@ -294,6 +329,12 @@ public:
                      const void *act,
                      int priority,
                      int signal_number);
+
+  virtual int writev (ACE_Message_Block &message_block,
+                      size_t bytes_to_write,
+                      const void *act,
+                      int priority,
+                      int signal_number);
 };
 
 class ACE_Export ACE_Uring_Asynch_Write_File
@@ -316,6 +357,20 @@ public:
                      const void *act,
                      int priority,
                      int signal_number);
+
+  virtual int writev (ACE_Message_Block &message_block,
+                      size_t bytes_to_write,
+                      u_long offset,
+                      u_long offset_high,
+                      const void *act,
+                      int priority,
+                      int signal_number);
+
+  virtual int writev (ACE_Message_Block &message_block,
+                      size_t bytes_to_write,
+                      const void *act,
+                      int priority,
+                      int signal_number);
 };
 
 class ACE_Export ACE_Uring_Asynch_Write_File_Result
@@ -330,7 +385,9 @@ public:
      const void *act,
      ACE_Proactor *proactor,
      u_long offset = 0,
-     u_long offset_high = 0);
+     u_long offset_high = 0,
+     bool vectored = false,
+     struct iovec *iovec = 0);
 
   virtual void complete (size_t bytes_transferred,
                          int success,
