@@ -15,6 +15,7 @@
 #include "ace/Log_Category.h"
 #include "ace/OS_NS_errno.h"
 #include "ace/OS_NS_sys_time.h"
+
 ACE_BEGIN_VERSIONED_NAMESPACE_DECL
 
 namespace
@@ -440,31 +441,90 @@ ACE_Uring_Proactor::create_asynch_write_file_result
 }
 
 ACE_Asynch_Read_Dgram_Result_Impl *
-ACE_Uring_Proactor::create_asynch_read_dgram_result (const ACE_Handler::Proxy_Ptr &handler_proxy, ACE_HANDLE handle, ACE_Message_Block *message_block, size_t bytes_to_read, int flags, int protocol_family, const void* act, ACE_HANDLE, int, int)
+ACE_Uring_Proactor::create_asynch_read_dgram_result (
+    const ACE_Handler::Proxy_Ptr &handler_proxy,
+    ACE_HANDLE handle,
+    ACE_Message_Block *message_block,
+    size_t bytes_to_read,
+    int flags,
+    int protocol_family,
+    const void *act,
+    ACE_HANDLE,
+    int,
+    int)
 {
   ACE_Uring_Asynch_Read_Dgram_Result *ret = 0;
-  ACE_NEW_RETURN (ret, ACE_Uring_Asynch_Read_Dgram_Result (handler_proxy, handle, message_block, bytes_to_read, flags, protocol_family, act, 0), 0);
+  ACE_NEW_RETURN (ret,
+                  ACE_Uring_Asynch_Read_Dgram_Result (handler_proxy,
+                                                      handle,
+                                                      message_block,
+                                                      bytes_to_read,
+                                                      flags,
+                                                      protocol_family,
+                                                      act,
+                                                      0),
+                  0);
   return ret;
 }
 
 ACE_Asynch_Write_Dgram_Result_Impl *
-ACE_Uring_Proactor::create_asynch_write_dgram_result (const ACE_Handler::Proxy_Ptr &handler_proxy, ACE_HANDLE handle, ACE_Message_Block *message_block, size_t bytes_to_write, int flags, const void* act, ACE_HANDLE, int, int)
+ACE_Uring_Proactor::create_asynch_write_dgram_result (
+    const ACE_Handler::Proxy_Ptr &handler_proxy,
+    ACE_HANDLE handle,
+    ACE_Message_Block *message_block,
+    size_t bytes_to_write,
+    int flags,
+    const void *act,
+    ACE_HANDLE,
+    int,
+    int)
 {
   ACE_Uring_Asynch_Write_Dgram_Result *ret = 0;
-  ACE_NEW_RETURN (ret, ACE_Uring_Asynch_Write_Dgram_Result (handler_proxy, handle, message_block, bytes_to_write, flags, act, 0), 0);
+  ACE_NEW_RETURN (ret,
+                  ACE_Uring_Asynch_Write_Dgram_Result (handler_proxy,
+                                                       handle,
+                                                       message_block,
+                                                       bytes_to_write,
+                                                       flags,
+                                                       act,
+                                                       0),
+                  0);
   return ret;
 }
 
 ACE_Asynch_Accept_Result_Impl *
-ACE_Uring_Proactor::create_asynch_accept_result (const ACE_Handler::Proxy_Ptr &handler_proxy, ACE_HANDLE listen_handle, ACE_HANDLE accept_handle, ACE_Message_Block &message_block, size_t bytes_to_read, const void* act, ACE_HANDLE, int, int)
+ACE_Uring_Proactor::create_asynch_accept_result (
+    const ACE_Handler::Proxy_Ptr &handler_proxy,
+    ACE_HANDLE listen_handle,
+    ACE_HANDLE accept_handle,
+    ACE_Message_Block &message_block,
+    size_t bytes_to_read,
+    const void *act,
+    ACE_HANDLE,
+    int,
+    int)
 {
   ACE_Uring_Asynch_Accept_Result *ret = 0;
-  ACE_NEW_RETURN (ret, ACE_Uring_Asynch_Accept_Result (handler_proxy, listen_handle, accept_handle, &message_block, bytes_to_read, act, 0), 0);
+  ACE_NEW_RETURN (ret,
+                  ACE_Uring_Asynch_Accept_Result (handler_proxy,
+                                                  listen_handle,
+                                                  accept_handle,
+                                                  &message_block,
+                                                  bytes_to_read,
+                                                  act,
+                                                  0),
+                  0);
   return ret;
 }
 
 ACE_Asynch_Connect_Result_Impl *
-ACE_Uring_Proactor::create_asynch_connect_result (const ACE_Handler::Proxy_Ptr &handler_proxy, ACE_HANDLE connect_handle, const void* act, ACE_HANDLE, int, int)
+ACE_Uring_Proactor::create_asynch_connect_result (
+    const ACE_Handler::Proxy_Ptr &handler_proxy,
+    ACE_HANDLE connect_handle,
+    const void *act,
+    ACE_HANDLE,
+    int,
+    int)
 {
   ACE_Uring_Asynch_Connect_Result *ret = 0;
   ACE_NEW_RETURN (ret, ACE_Uring_Asynch_Connect_Result (handler_proxy, connect_handle, act, 0), 0);
@@ -472,10 +532,35 @@ ACE_Uring_Proactor::create_asynch_connect_result (const ACE_Handler::Proxy_Ptr &
 }
 
 ACE_Asynch_Transmit_File_Result_Impl *
-ACE_Uring_Proactor::create_asynch_transmit_file_result (const ACE_Handler::Proxy_Ptr &handler_proxy, ACE_HANDLE socket, ACE_HANDLE file, ACE_Asynch_Transmit_File::Header_And_Trailer *header_and_trailer, size_t bytes_to_write, u_long offset, u_long offset_high, size_t bytes_per_send, u_long flags, const void *act, ACE_HANDLE, int, int)
+ACE_Uring_Proactor::create_asynch_transmit_file_result (
+    const ACE_Handler::Proxy_Ptr &handler_proxy,
+    ACE_HANDLE socket,
+    ACE_HANDLE file,
+    ACE_Asynch_Transmit_File::Header_And_Trailer *header_and_trailer,
+    size_t bytes_to_write,
+    u_long offset,
+    u_long offset_high,
+    size_t bytes_per_send,
+    u_long flags,
+    const void *act,
+    ACE_HANDLE,
+    int,
+    int)
 {
   ACE_Uring_Asynch_Transmit_File_Result *ret = 0;
-  ACE_NEW_RETURN (ret, ACE_Uring_Asynch_Transmit_File_Result (handler_proxy, socket, file, header_and_trailer, bytes_to_write, offset, offset_high, bytes_per_send, flags, act, 0), 0);
+  ACE_NEW_RETURN (ret,
+                  ACE_Uring_Asynch_Transmit_File_Result (handler_proxy,
+                                                         socket,
+                                                         file,
+                                                         header_and_trailer,
+                                                         bytes_to_write,
+                                                         offset,
+                                                         offset_high,
+                                                         bytes_per_send,
+                                                         flags,
+                                                         act,
+                                                         0),
+                  0);
   return ret;
 }
 

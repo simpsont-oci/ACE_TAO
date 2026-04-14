@@ -62,7 +62,7 @@ protected:
   ACE_Select_Reactor select_reactor_;
 
   ACE_Reactor reactor_;
-  ACE_Atomic_Op<ACE_SYNCH_MUTEX, int> started_;
+  ACE_Atomic_Op<ACE_SYNCH_MUTEX, bool> started_;
 };
 
 ACE_END_VERSIONED_NAMESPACE_DECL
