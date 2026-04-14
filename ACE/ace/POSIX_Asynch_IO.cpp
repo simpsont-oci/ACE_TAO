@@ -527,10 +527,10 @@ ACE_POSIX_Asynch_Read_File::read (ACE_Message_Block &message_block,
                                   int signal_number)
 {
   size_t space = message_block.space ();
-  if ( bytes_to_read > space )
+  if (bytes_to_read > space)
      bytes_to_read=space;
 
-  if ( bytes_to_read == 0 )
+  if (bytes_to_read == 0)
     ACELIB_ERROR_RETURN
       ((LM_ERROR,
         ACE_TEXT ("ACE_POSIX_Asynch_Read_File::read:")
@@ -1007,7 +1007,7 @@ ACE_POSIX_Asynch_Accept::close ()
   ACE_TRACE ("ACE_POSIX_Asynch_Accept::close");
 
   // 1. It performs cancellation of all pending requests
-  // 2. Removes itself from Reactor ( ACE_Asynch_Pseudo_Task)
+  // 2. Removes itself from Reactor (ACE_Asynch_Pseudo_Task)
   // 3. close the socket
   //
   //  Parameter flg_notify can be
@@ -1089,7 +1089,7 @@ ACE_POSIX_Asynch_Accept::handle_input (ACE_HANDLE /* fd */)
       ACELIB_ERROR ((LM_ERROR,
                   ACE_TEXT("%N:%l:(%P | %t):%p\n"),
                   ACE_TEXT("ACE_POSIX_Asynch_Accept::handle_input:")
-                  ACE_TEXT( " dequeueing failed")));
+                  ACE_TEXT(" dequeueing failed")));
 
     // Disable the handle in the reactor if no more accepts are pending.
     if (this->result_queue_.size () == 0)
@@ -1356,7 +1356,7 @@ int ACE_POSIX_Asynch_Connect::post_result (ACE_POSIX_Asynch_Connect_Result * res
 //  return code :
 //   -1   errors  before  attempt to connect
 //    0   connect started
-//    1   connect finished ( may be unsuccessfully)
+//    1   connect finished (may be unsuccessfully)
 
 int
 ACE_POSIX_Asynch_Connect::connect_i (ACE_POSIX_Asynch_Connect_Result *result,
@@ -1397,7 +1397,7 @@ ACE_POSIX_Asynch_Connect::connect_i (ACE_POSIX_Asynch_Connect_Result *result,
                               SOL_SOCKET,
                               SO_REUSEADDR,
                               (const char*) &one,
-                              sizeof one) == -1 )
+                              sizeof one) == -1)
         {
           if (created_handle)
             {
@@ -2061,10 +2061,7 @@ ACE_POSIX_Asynch_Transmit_Handler::initiate_read_file (void)
         {
           ACE_SEH_TRY
             {
-              this->result_->complete (this->bytes_transferred_,
-                                       1,
-                                       0,
-                                       0);
+              this->result_->complete (this->bytes_transferred_, 1, 0, 0);
             }
           ACE_SEH_FINALLY
             {

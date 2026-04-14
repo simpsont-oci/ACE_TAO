@@ -857,7 +857,7 @@ int ACE_POSIX_AIOCB_Proactor::create_result_aiocb_list (void)
                   -1);
 
   // Initialize the array.
-  for (size_t ai = 0; ai < this->aiocb_list_max_size_; ai++)
+  for (size_t ai = 0; ai < this->aiocb_list_max_size_; ++ai)
     {
       aiocb_list_[ai] = 0;
       result_list_[ai] = 0;
@@ -873,7 +873,7 @@ int ACE_POSIX_AIOCB_Proactor::delete_result_aiocb_list (void)
 
   size_t ai;
 
-  for (ai = 0; ai < aiocb_list_max_size_; ai++)
+  for (ai = 0; ai < aiocb_list_max_size_; ++ai)
     {
       if (this->result_list_[ai] == 0 || this->aiocb_list_[ai] != 0)
         continue;
@@ -884,7 +884,7 @@ int ACE_POSIX_AIOCB_Proactor::delete_result_aiocb_list (void)
 
   // Try to cancel all uncompleted operations; POSIX systems may have
   // hidden system threads that still can work with our aiocbs!
-  for (ai = 0; ai < aiocb_list_max_size_; ai++)
+  for (ai = 0; ai < aiocb_list_max_size_; ++ai)
     if (this->aiocb_list_[ai] != 0)  // active operation
       this->cancel_aiocb (result_list_[ai]);
 
@@ -896,9 +896,9 @@ int ACE_POSIX_AIOCB_Proactor::delete_result_aiocb_list (void)
     {
       num_pending = 0;
 
-      for (ai = 0; ai < aiocb_list_max_size_; ai++)
+      for (ai = 0; ai < aiocb_list_max_size_; ++ai)
         {
-          if (this->aiocb_list_[ai] == 0 ) //  not active operation
+          if (this->aiocb_list_[ai] == 0)  // not active operation
             continue;
 
           int error_status  = 0;
@@ -909,7 +909,7 @@ int ACE_POSIX_AIOCB_Proactor::delete_result_aiocb_list (void)
 
           if (flg_completed == 0)  // not completed
             {
-              num_pending++;
+              ++num_pending;
               continue;
             }
 
@@ -925,9 +925,9 @@ int ACE_POSIX_AIOCB_Proactor::delete_result_aiocb_list (void)
         ACE_OS::sleep (settle_interval);
     }
 
-  for (ai = 0; ai < aiocb_list_max_size_; ai++)
+  for (ai = 0; ai < aiocb_list_max_size_; ++ai)
     {
-      if (this->aiocb_list_[ai] == 0 )
+      if (this->aiocb_list_[ai] == 0)
         continue;
 
       int error_status  = 0;
@@ -1234,7 +1234,7 @@ ACE_POSIX_AIOCB_Proactor::handle_events_i (u_long milli_seconds)
   if (result_suspend == -1)
     {
       if (errno != EAGAIN &&   // Timeout
-          errno != EINTR )    // Interrupted call
+          errno != EINTR)      // Interrupted call
           ACELIB_ERROR ((LM_ERROR,
                       ACE_TEXT ("%N:%l:(%P|%t)::%p\n"),
                       ACE_TEXT ("handle_events: aio_suspend failed")));
@@ -1478,7 +1478,7 @@ ACE_POSIX_AIOCB_Proactor::start_aio_i (ACE_POSIX_Asynch_Result *result)
   // The following aio_ptr anathema is required to work around a bug in
   // the optimizer for GCC 4.1.2
   aiocb * aio_ptr (result);
-  switch (result->aio_lio_opcode )
+  switch (result->aio_lio_opcode)
     {
     case LIO_READ :
       ptype = ACE_TEXT ("read ");
@@ -1560,7 +1560,7 @@ ACE_POSIX_AIOCB_Proactor::start_deferred_aio ()
     {
     case 0 :    //started OK , decrement count of deferred AIOs
       this->aiocb_list_[deferred_index] = result;
-      this->num_deferred_aiocb_ --;
+      --this->num_deferred_aiocb_;
       return 0;
 
     case 1 :

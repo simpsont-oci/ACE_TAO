@@ -322,7 +322,8 @@ ACE_Uring_Asynch_Operation::open (const ACE_Handler::Proxy_Ptr &handler_proxy,
   this->handle_ = handle;
   this->proactor_ = proactor;
 
-  // Grab the handle from the handler if none was provided (matches POSIX behavior)
+  // Grab the handle from the handler if none was provided
+  // (matches POSIX behavior).
   if (this->handle_ == ACE_INVALID_HANDLE)
     {
       ACE_Handler *h = handler_proxy.get ()->handler ();
@@ -1319,11 +1320,24 @@ ACE_Uring_Asynch_Accept::accept (ACE_Message_Block &message_block,
                                  int)
 {
   ACE_Uring_Asynch_Accept_Result *result = 0;
-  ACE_NEW_RETURN (result, ACE_Uring_Asynch_Accept_Result (this->handler_proxy_, this->handle_, accept_handle, &message_block, bytes_to_read, act, this->proactor_), -1);
+  ACE_NEW_RETURN (result,
+                  ACE_Uring_Asynch_Accept_Result (this->handler_proxy_,
+                                                  this->handle_,
+                                                  accept_handle,
+                                                  &message_block,
+                                                  bytes_to_read,
+                                                  act,
+                                                  this->proactor_),
+                  -1);
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
   struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
-  if (!sqe) { delete result; errno = EAGAIN; return -1; }
+  if (!sqe)
+    {
+      delete result;
+      errno = EAGAIN;
+      return -1;
+    }
 
   ::io_uring_prep_accept (sqe, this->handle_, result->addr (), result->addrlen (), 0);
   ::io_uring_sqe_set_data (sqe, result);
@@ -1334,10 +1348,26 @@ ACE_Uring_Asynch_Accept::accept (ACE_Message_Block &message_block,
 // Connect Impl
 // ---------------------------------------------------------------------------
 
-ACE_Uring_Asynch_Connect_Result::ACE_Uring_Asynch_Connect_Result (const ACE_Handler::Proxy_Ptr &handler_proxy, ACE_HANDLE connect_handle, const void *act, ACE_Proactor *proactor)
-  : ACE_Uring_Asynch_Result (handler_proxy, act, connect_handle, 0, 0, proactor), connect_handle_ (connect_handle) {}
+ACE_Uring_Asynch_Connect_Result::ACE_Uring_Asynch_Connect_Result (
+    const ACE_Handler::Proxy_Ptr &handler_proxy,
+    ACE_HANDLE connect_handle,
+    const void *act,
+    ACE_Proactor *proactor)
+  : ACE_Uring_Asynch_Result (handler_proxy,
+                             act,
+                             connect_handle,
+                             0,
+                             0,
+                             proactor)
+  , connect_handle_ (connect_handle)
+{
+}
 
-void ACE_Uring_Asynch_Connect_Result::complete (size_t bytes_transferred, int /*success*/, const void *, u_long error)
+void
+ACE_Uring_Asynch_Connect_Result::complete (size_t bytes_transferred,
+                                           int /*success*/,
+                                           const void *,
+                                           u_long error)
 {
   this->bytes_transferred_ = bytes_transferred;
   this->error_ = error;
@@ -1362,13 +1392,15 @@ ACE_Uring_Asynch_Connect_Result::connect_handle (ACE_HANDLE handle)
 }
 
 ACE_Uring_Asynch_Connect::ACE_Uring_Asynch_Connect (ACE_Uring_Proactor *proactor)
-  : ACE_Uring_Asynch_Operation (proactor) {}
+  : ACE_Uring_Asynch_Operation (proactor)
+{
+}
 
 int
 ACE_Uring_Asynch_Connect::open (const ACE_Handler::Proxy_Ptr &handler_proxy,
-                                 ACE_HANDLE handle,
-                                 const void *completion_key,
-                                 ACE_Proactor *proactor)
+                                ACE_HANDLE handle,
+                                const void *completion_key,
+                                ACE_Proactor *proactor)
 {
   // Call the base class but ignore failure when handle is INVALID_HANDLE:
   // the connect socket is not known yet, it will be created per-connect call.
@@ -1378,10 +1410,22 @@ ACE_Uring_Asynch_Connect::open (const ACE_Handler::Proxy_Ptr &handler_proxy,
   return 0;
 }
 
-int ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle, const ACE_Addr &remote_sap, const ACE_Addr &local_sap, int reuse_addr, const void *act, int, int)
+int
+ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle,
+                                   const ACE_Addr &remote_sap,
+                                   const ACE_Addr &local_sap,
+                                   int reuse_addr,
+                                   const void *act,
+                                   int,
+                                   int)
 {
   ACE_Uring_Asynch_Connect_Result *result = 0;
-  ACE_NEW_RETURN (result, ACE_Uring_Asynch_Connect_Result (this->handler_proxy_, connect_handle, act, this->proactor_), -1);
+  ACE_NEW_RETURN (result,
+                  ACE_Uring_Asynch_Connect_Result (this->handler_proxy_,
+                                                   connect_handle,
+                                                   act,
+                                                   this->proactor_),
+                  -1);
 
   ACE_HANDLE handle = result->connect_handle ();
   bool created_handle = false;
@@ -1394,7 +1438,7 @@ int ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle, const ACE_Addr
       handle = ACE_OS::socket (protocol_family,
                                SOCK_STREAM,
                                0);
-      // save it
+      // Save it.
       result->connect_handle (handle);
       connect_handle = handle;
       created_handle = (handle != ACE_INVALID_HANDLE);
@@ -1402,25 +1446,25 @@ int ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle, const ACE_Addr
         {
           result->set_error (errno);
           ACELIB_ERROR ((LM_ERROR,
-                         ACE_TEXT("ACE_Uring_Asynch_Connect::connect_i: %p\n"),
-                         ACE_TEXT("socket")));
+                         ACE_TEXT ("ACE_Uring_Asynch_Connect::connect_i: %p\n"),
+                         ACE_TEXT ("socket")));
         }
       else
         {
-          // Reuse the address
+          // Reuse the address.
           int one = 1;
           if (protocol_family != PF_UNIX &&
               reuse_addr != 0 &&
               ACE_OS::setsockopt (handle,
                                   SOL_SOCKET,
                                   SO_REUSEADDR,
-                                  (const char*) &one,
-                                  sizeof one) == -1 )
+                                  (const char *) &one,
+                                  sizeof one) == -1)
             {
               result->set_error (errno);
               ACELIB_ERROR ((LM_ERROR,
-                             ACE_TEXT("ACE_Uring_Asynch_Connect::connect_i: %p\n"),
-                             ACE_TEXT("setsockopt")));
+                             ACE_TEXT ("ACE_Uring_Asynch_Connect::connect_i: %p\n"),
+                             ACE_TEXT ("setsockopt")));
             }
         }
     }
@@ -1434,18 +1478,18 @@ int ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle, const ACE_Addr
         {
            result->set_error (errno);
            ACELIB_ERROR ((LM_ERROR,
-                          ACE_TEXT("ACE_Uring_Asynch_Connect::connect_i: %p\n"),
-                          ACE_TEXT("bind")));
+                          ACE_TEXT ("ACE_Uring_Asynch_Connect::connect_i: %p\n"),
+                          ACE_TEXT ("bind")));
         }
     }
 
-  // set non blocking mode
+  // Set non-blocking mode.
   if (result->error () == 0 && ACE::set_flags (handle, ACE_NONBLOCK) != 0)
     {
       result->set_error (errno);
       ACELIB_ERROR ((LM_ERROR,
-                     ACE_TEXT("ACE_Uring_Asynch_Connect::connect_i: %p\n")
-                     ACE_TEXT("set_flags")));
+                     ACE_TEXT ("ACE_Uring_Asynch_Connect::connect_i: %p\n"),
+                     ACE_TEXT ("set_flags")));
     }
 
   if (result->error () == 0)
@@ -1459,7 +1503,10 @@ int ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle, const ACE_Addr
         }
       else
         {
-          ::io_uring_prep_connect (sqe, connect_handle, (struct sockaddr *)remote_sap.get_addr (), remote_sap.get_size ());
+          ::io_uring_prep_connect (sqe,
+                                   connect_handle,
+                                   (struct sockaddr *) remote_sap.get_addr (),
+                                   remote_sap.get_size ());
           ::io_uring_sqe_set_data (sqe, result);
           this->register_result (result);
           int submit_result = this->uring_proactor_->submit_sqe ();
@@ -1492,8 +1539,24 @@ int ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle, const ACE_Addr
 // Datagram Impl
 // ---------------------------------------------------------------------------
 
-ACE_Uring_Asynch_Read_Dgram_Result::ACE_Uring_Asynch_Read_Dgram_Result (const ACE_Handler::Proxy_Ptr &handler_proxy, ACE_HANDLE handle, ACE_Message_Block *message_block, size_t bytes_to_read, int flags, int protocol_family, const void *act, ACE_Proactor *proactor)
-  : ACE_Uring_Asynch_Result (handler_proxy, act, handle, 0, 0, proactor), message_block_ (message_block), bytes_to_read_ (bytes_to_read), flags_ (flags)
+ACE_Uring_Asynch_Read_Dgram_Result::ACE_Uring_Asynch_Read_Dgram_Result (
+    const ACE_Handler::Proxy_Ptr &handler_proxy,
+    ACE_HANDLE handle,
+    ACE_Message_Block *message_block,
+    size_t bytes_to_read,
+    int flags,
+    int protocol_family,
+    const void *act,
+    ACE_Proactor *proactor)
+  : ACE_Uring_Asynch_Result (handler_proxy,
+                             act,
+                             handle,
+                             0,
+                             0,
+                             proactor)
+  , message_block_ (message_block)
+  , bytes_to_read_ (bytes_to_read)
+  , flags_ (flags)
 {
   ACE_OS::memset (&this->msg_, 0, sizeof (this->msg_));
   this->iov_.iov_base = message_block->wr_ptr ();
@@ -1511,17 +1574,28 @@ ACE_Uring_Asynch_Read_Dgram_Result::message_block (void) const
   return this->message_block_;
 }
 
-void ACE_Uring_Asynch_Read_Dgram_Result::complete (size_t bytes_transferred, int success, const void *, u_long error)
+void
+ACE_Uring_Asynch_Read_Dgram_Result::complete (size_t bytes_transferred,
+                                              int success,
+                                              const void *,
+                                              u_long error)
 {
   this->bytes_transferred_ = bytes_transferred;
   this->error_ = error;
-  if (success && this->message_block_) this->message_block_->wr_ptr (bytes_transferred);
+  if (success && this->message_block_ != 0)
+    this->message_block_->wr_ptr (bytes_transferred);
+
   ACE_Handler *handler = this->handler ();
-  if (handler) { ACE_Asynch_Read_Dgram::Result result (this); handler->handle_read_dgram (result); }
+  if (handler != 0)
+    {
+      ACE_Asynch_Read_Dgram::Result result (this);
+      handler->handle_read_dgram (result);
+    }
   delete this;
 }
 
-int ACE_Uring_Asynch_Read_Dgram_Result::remote_address (ACE_Addr& addr) const
+int
+ACE_Uring_Asynch_Read_Dgram_Result::remote_address (ACE_Addr &addr) const
 {
   ACE_OS::memcpy (addr.get_addr (), &this->remote_addr_, this->msg_.msg_namelen);
   addr.set_size (this->msg_.msg_namelen);
@@ -1553,22 +1627,62 @@ ACE_Uring_Asynch_Read_Dgram_Result::msg (void)
 }
 
 ACE_Uring_Asynch_Read_Dgram::ACE_Uring_Asynch_Read_Dgram (ACE_Uring_Proactor *proactor)
-  : ACE_Uring_Asynch_Operation (proactor) {}
+  : ACE_Uring_Asynch_Operation (proactor)
+{
+}
 
-ssize_t ACE_Uring_Asynch_Read_Dgram::recv (ACE_Message_Block *message_block, size_t &/*number_of_bytes_recvd*/, int flags, int protocol_family, const void *act, int, int)
+ssize_t
+ACE_Uring_Asynch_Read_Dgram::recv (ACE_Message_Block *message_block,
+                                   size_t &/*number_of_bytes_recvd*/,
+                                   int flags,
+                                   int protocol_family,
+                                   const void *act,
+                                   int,
+                                   int)
 {
   ACE_Uring_Asynch_Read_Dgram_Result *result = 0;
-  ACE_NEW_RETURN (result, ACE_Uring_Asynch_Read_Dgram_Result (this->handler_proxy_, this->handle_, message_block, message_block->space (), flags, protocol_family, act, this->proactor_), -1);
+  ACE_NEW_RETURN (result,
+                  ACE_Uring_Asynch_Read_Dgram_Result (this->handler_proxy_,
+                                                      this->handle_,
+                                                      message_block,
+                                                      message_block->space (),
+                                                      flags,
+                                                      protocol_family,
+                                                      act,
+                                                      this->proactor_),
+                  -1);
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
   struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
-  if (!sqe) { delete result; errno = EAGAIN; return -1; }
+  if (!sqe)
+    {
+      delete result;
+      errno = EAGAIN;
+      return -1;
+    }
+
   ::io_uring_prep_recvmsg (sqe, this->handle_, result->msg (), flags);
   ::io_uring_sqe_set_data (sqe, result);
   return this->submit_result (result);
 }
 
-ACE_Uring_Asynch_Write_Dgram_Result::ACE_Uring_Asynch_Write_Dgram_Result (const ACE_Handler::Proxy_Ptr &handler_proxy, ACE_HANDLE handle, ACE_Message_Block *message_block, size_t bytes_to_write, int flags, const void *act, ACE_Proactor *proactor)
-  : ACE_Uring_Asynch_Result (handler_proxy, act, handle, 0, 0, proactor), message_block_ (message_block), bytes_to_write_ (bytes_to_write), flags_ (flags), remote_addr_len_ (0)
+ACE_Uring_Asynch_Write_Dgram_Result::ACE_Uring_Asynch_Write_Dgram_Result (
+    const ACE_Handler::Proxy_Ptr &handler_proxy,
+    ACE_HANDLE handle,
+    ACE_Message_Block *message_block,
+    size_t bytes_to_write,
+    int flags,
+    const void *act,
+    ACE_Proactor *proactor)
+  : ACE_Uring_Asynch_Result (handler_proxy,
+                             act,
+                             handle,
+                             0,
+                             0,
+                             proactor)
+  , message_block_ (message_block)
+  , bytes_to_write_ (bytes_to_write)
+  , flags_ (flags)
+  , remote_addr_len_ (0)
 {
   ACE_OS::memset (&this->msg_, 0, sizeof (this->msg_));
   ACE_OS::memset (&this->remote_addr_, 0, sizeof (this->remote_addr_));
@@ -1584,13 +1698,23 @@ ACE_Uring_Asynch_Write_Dgram_Result::message_block (void) const
   return this->message_block_;
 }
 
-void ACE_Uring_Asynch_Write_Dgram_Result::complete (size_t bytes_transferred, int success, const void *, u_long error)
+void
+ACE_Uring_Asynch_Write_Dgram_Result::complete (size_t bytes_transferred,
+                                               int success,
+                                               const void *,
+                                               u_long error)
 {
   this->bytes_transferred_ = bytes_transferred;
   this->error_ = error;
-  if (success && this->message_block_) this->message_block_->rd_ptr (bytes_transferred);
+  if (success && this->message_block_ != 0)
+    this->message_block_->rd_ptr (bytes_transferred);
+
   ACE_Handler *handler = this->handler ();
-  if (handler) { ACE_Asynch_Write_Dgram::Result result (this); handler->handle_write_dgram (result); }
+  if (handler != 0)
+    {
+      ACE_Asynch_Write_Dgram::Result result (this);
+      handler->handle_write_dgram (result);
+    }
   delete this;
 }
 
@@ -1623,7 +1747,7 @@ ACE_Uring_Asynch_Write_Dgram_Result::remote_address (const ACE_Addr &addr)
 {
   if (addr.get_addr () == 0
       || addr.get_size () == 0
-      || static_cast<size_t>(addr.get_size ()) > sizeof (this->remote_addr_))
+      || static_cast<size_t> (addr.get_size ()) > sizeof (this->remote_addr_))
     {
       errno = EINVAL;
       return -1;
@@ -1637,12 +1761,29 @@ ACE_Uring_Asynch_Write_Dgram_Result::remote_address (const ACE_Addr &addr)
 }
 
 ACE_Uring_Asynch_Write_Dgram::ACE_Uring_Asynch_Write_Dgram (ACE_Uring_Proactor *proactor)
-  : ACE_Uring_Asynch_Operation (proactor) {}
+  : ACE_Uring_Asynch_Operation (proactor)
+{
+}
 
-ssize_t ACE_Uring_Asynch_Write_Dgram::send (ACE_Message_Block *message_block, size_t &/*number_of_bytes_sent*/, int flags, const ACE_Addr &remote_addr, const void *act, int, int)
+ssize_t
+ACE_Uring_Asynch_Write_Dgram::send (ACE_Message_Block *message_block,
+                                    size_t &/*number_of_bytes_sent*/,
+                                    int flags,
+                                    const ACE_Addr &remote_addr,
+                                    const void *act,
+                                    int,
+                                    int)
 {
   ACE_Uring_Asynch_Write_Dgram_Result *result = 0;
-  ACE_NEW_RETURN (result, ACE_Uring_Asynch_Write_Dgram_Result (this->handler_proxy_, this->handle_, message_block, message_block->length (), flags, act, this->proactor_), -1);
+  ACE_NEW_RETURN (result,
+                  ACE_Uring_Asynch_Write_Dgram_Result (this->handler_proxy_,
+                                                       this->handle_,
+                                                       message_block,
+                                                       message_block->length (),
+                                                       flags,
+                                                       act,
+                                                       this->proactor_),
+                  -1);
   if (result->remote_address (remote_addr) != 0)
     {
       delete result;
@@ -1651,7 +1792,13 @@ ssize_t ACE_Uring_Asynch_Write_Dgram::send (ACE_Message_Block *message_block, si
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
   struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
-  if (!sqe) { delete result; errno = EAGAIN; return -1; }
+  if (!sqe)
+    {
+      delete result;
+      errno = EAGAIN;
+      return -1;
+    }
+
   ::io_uring_prep_sendmsg (sqe, this->handle_, result->msg (), flags);
   ::io_uring_sqe_set_data (sqe, result);
   return this->submit_result (result);
@@ -1661,14 +1808,31 @@ ssize_t ACE_Uring_Asynch_Write_Dgram::send (ACE_Message_Block *message_block, si
 // Transmit File Impl
 // ---------------------------------------------------------------------------
 
-ACE_Uring_Asynch_Transmit_File_Result::ACE_Uring_Asynch_Transmit_File_Result (const ACE_Handler::Proxy_Ptr &handler_proxy, ACE_HANDLE socket, ACE_HANDLE file, ACE_Asynch_Transmit_File::Header_And_Trailer *header_and_trailer, size_t bytes_to_write, u_long offset, u_long offset_high, size_t bytes_per_send, u_long flags, const void *act, ACE_Proactor *proactor)
-  : ACE_Uring_Asynch_Result (handler_proxy, act, socket, offset, offset_high, proactor),
-    file_ (file),
-    header_and_trailer_ (header_and_trailer),
-    bytes_to_write_ (bytes_to_write),
-    bytes_per_send_ (bytes_per_send),
-    flags_ (flags)
-{}
+ACE_Uring_Asynch_Transmit_File_Result::ACE_Uring_Asynch_Transmit_File_Result (
+    const ACE_Handler::Proxy_Ptr &handler_proxy,
+    ACE_HANDLE socket,
+    ACE_HANDLE file,
+    ACE_Asynch_Transmit_File::Header_And_Trailer *header_and_trailer,
+    size_t bytes_to_write,
+    u_long offset,
+    u_long offset_high,
+    size_t bytes_per_send,
+    u_long flags,
+    const void *act,
+    ACE_Proactor *proactor)
+  : ACE_Uring_Asynch_Result (handler_proxy,
+                             act,
+                             socket,
+                             offset,
+                             offset_high,
+                             proactor)
+  , file_ (file)
+  , header_and_trailer_ (header_and_trailer)
+  , bytes_to_write_ (bytes_to_write)
+  , bytes_per_send_ (bytes_per_send)
+  , flags_ (flags)
+{
+}
 
 ACE_HANDLE
 ACE_Uring_Asynch_Transmit_File_Result::socket (void) const
@@ -1706,19 +1870,40 @@ ACE_Uring_Asynch_Transmit_File_Result::flags (void) const
   return this->flags_;
 }
 
-void ACE_Uring_Asynch_Transmit_File_Result::complete (size_t bytes_transferred, int /*success*/, const void *, u_long error)
+void
+ACE_Uring_Asynch_Transmit_File_Result::complete (size_t bytes_transferred,
+                                                 int /*success*/,
+                                                 const void *,
+                                                 u_long error)
 {
   this->bytes_transferred_ = bytes_transferred;
   this->error_ = error;
   ACE_Handler *handler = this->handler ();
-  if (handler) { ACE_Asynch_Transmit_File::Result result (this); handler->handle_transmit_file (result); }
+  if (handler != 0)
+    {
+      ACE_Asynch_Transmit_File::Result result (this);
+      handler->handle_transmit_file (result);
+    }
   delete this;
 }
 
 ACE_Uring_Asynch_Transmit_File::ACE_Uring_Asynch_Transmit_File (ACE_Uring_Proactor *proactor)
-  : ACE_Uring_Asynch_Operation (proactor) {}
+  : ACE_Uring_Asynch_Operation (proactor)
+{
+}
 
-int ACE_Uring_Asynch_Transmit_File::transmit_file (ACE_HANDLE file, ACE_Asynch_Transmit_File::Header_And_Trailer *header_and_trailer, size_t bytes_to_write, u_long offset, u_long offset_high, size_t bytes_per_send, u_long flags, const void *act, int, int)
+int
+ACE_Uring_Asynch_Transmit_File::transmit_file (
+    ACE_HANDLE file,
+    ACE_Asynch_Transmit_File::Header_And_Trailer *header_and_trailer,
+    size_t bytes_to_write,
+    u_long offset,
+    u_long offset_high,
+    size_t bytes_per_send,
+    u_long flags,
+    const void *act,
+    int,
+    int)
 {
   ACE_UNUSED_ARG (file);
   ACE_UNUSED_ARG (header_and_trailer);
