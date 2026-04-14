@@ -1,4 +1,8 @@
-#!/usr/bin/env perl
+eval '(exit $?0)' && eval 'exec perl -S $0 ${1+"$@"}'
+    & eval 'exec perl -S $0 $argv:q'
+    if 0;
+
+# -*- perl -*-
 
 use strict;
 use warnings;
@@ -11,6 +15,11 @@ use Getopt::Long qw(GetOptions);
 use POSIX qw(WNOHANG strftime);
 use Text::ParseWords qw(shellwords);
 use Time::HiRes qw(sleep time);
+
+sub value_or_default {
+  my ($value, $default) = @_;
+  return defined $value ? $value : $default;
+}
 
 my $script_dir = abs_path(dirname($0));
 my $ace_root = abs_path("$script_dir/..");
@@ -26,12 +35,12 @@ $ENV{LD_LIBRARY_PATH} = join(
     ("$ace_root/lib", $script_dir, $ENV{LD_LIBRARY_PATH})
 );
 
-my $timeout_secs = $ENV{TIMEOUT_SECS} // 180;
-my $base_port = $ENV{BASE_PORT} // 20000;
-my $include_default = $ENV{INCLUDE_DEFAULT} // 0;
-my $fail_fast = $ENV{FAIL_FAST} // 0;
-my $run_network_udp = $ENV{RUN_NETWORK_UDP} // 1;
-my $expected_fail_backends = $ENV{EXPECTED_FAIL_BACKENDS} // '';
+my $timeout_secs = value_or_default($ENV{TIMEOUT_SECS}, 180);
+my $base_port = value_or_default($ENV{BASE_PORT}, 20000);
+my $include_default = value_or_default($ENV{INCLUDE_DEFAULT}, 0);
+my $fail_fast = value_or_default($ENV{FAIL_FAST}, 0);
+my $run_network_udp = value_or_default($ENV{RUN_NETWORK_UDP}, 1);
+my $expected_fail_backends = value_or_default($ENV{EXPECTED_FAIL_BACKENDS}, '');
 
 my @requested_tests;
 my @requested_backends;

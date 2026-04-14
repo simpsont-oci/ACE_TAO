@@ -1,4 +1,8 @@
-#!/usr/bin/env perl
+eval '(exit $?0)' && eval 'exec perl -S $0 ${1+"$@"}'
+    & eval 'exec perl -S $0 $argv:q'
+    if 0;
+
+# -*- perl -*-
 
 use strict;
 use warnings;
@@ -11,6 +15,11 @@ use Getopt::Long qw(GetOptions);
 use POSIX qw(WNOHANG strftime);
 use Text::ParseWords qw(shellwords);
 use Time::HiRes qw(sleep time);
+
+sub value_or_default {
+  my ($value, $default) = @_;
+  return defined $value ? $value : $default;
+}
 
 my $script_dir = abs_path(dirname($0));
 my $ace_root = abs_path("$script_dir/..");
@@ -27,11 +36,11 @@ $ENV{LD_LIBRARY_PATH} = join(
     ("$ace_root/lib", $script_dir, $ENV{LD_LIBRARY_PATH})
 );
 
-my $network_timeout_secs = $ENV{TIMEOUT_SECS_NETWORK} // 300;
-my $stress_timeout_secs = $ENV{TIMEOUT_SECS_STRESS} // 120;
-my $base_port = $ENV{BASE_PORT} // 26000;
-my $fail_fast = $ENV{FAIL_FAST} // 0;
-my $include_ipv6 = $ENV{INCLUDE_IPV6} // 'auto';
+my $network_timeout_secs = value_or_default($ENV{TIMEOUT_SECS_NETWORK}, 300);
+my $stress_timeout_secs = value_or_default($ENV{TIMEOUT_SECS_STRESS}, 120);
+my $base_port = value_or_default($ENV{BASE_PORT}, 26000);
+my $fail_fast = value_or_default($ENV{FAIL_FAST}, 0);
+my $include_ipv6 = value_or_default($ENV{INCLUDE_IPV6}, 'auto');
 
 my @requested_scenarios;
 my @requested_backends;
@@ -299,9 +308,9 @@ sub generate_summary {
   open my $fh, '>', $summary_txt or die "open $summary_txt failed: $!";
 
   my $total = scalar @rows;
-  my $pass = scalar grep { ($_->{status} // '') eq 'pass' } @rows;
-  my $fail = scalar grep { ($_->{status} // '') eq 'fail' } @rows;
-  my $skip = scalar grep { ($_->{status} // '') eq 'skip' } @rows;
+  my $pass = scalar grep { value_or_default($_->{status}, '') eq 'pass' } @rows;
+  my $fail = scalar grep { value_or_default($_->{status}, '') eq 'fail' } @rows;
+  my $skip = scalar grep { value_or_default($_->{status}, '') eq 'skip' } @rows;
 
   print {$fh} "Run Directory: $run_dir\n";
   print {$fh} "Results TSV: $results_tsv\n";
@@ -317,10 +326,11 @@ sub generate_summary {
   print {$fh} "\nStress Timing:\n";
   print {$fh} "mode\tbackend\telapsed_sec\tcallbacks_per_sec\tschedule_failures\n";
   my @stress_rows = sort {
-    ($a->{stress_mode} // '') cmp ($b->{stress_mode} // '')
+    value_or_default($a->{stress_mode}, '') cmp value_or_default($b->{stress_mode}, '')
       || num_value($a->{elapsed_sec}) <=> num_value($b->{elapsed_sec})
   } grep {
-    ($_->{benchmark} // '') eq 'stress' && ($_->{status} // '') eq 'pass'
+    value_or_default($_->{benchmark}, '') eq 'stress'
+      && value_or_default($_->{status}, '') eq 'pass'
   } @rows;
   for my $row (@stress_rows) {
     print {$fh} join(
@@ -331,17 +341,18 @@ sub generate_summary {
   }
 
   for my $scenario (@scenario_order) {
-    next if ($scenario_type{$scenario} // '') ne 'network';
+    next if value_or_default($scenario_type{$scenario}, '') ne 'network';
 
     print {$fh} "\nScenario: $scenario\n";
     print {$fh} "Description: $scenario_desc{$scenario}\n";
     print {$fh} "backend\tstatus\tfamily\ttransport\telapsed_sec\trecv_mib_per_sec\tavg_write_us\tavg_completion_us\tudp_loss_pct\tudp_rcvbuf_actual\tudp_sndbuf_actual\n";
 
     my @scenario_rows = sort {
-      ($a->{status} // '') cmp ($b->{status} // '')
+      value_or_default($a->{status}, '') cmp value_or_default($b->{status}, '')
         || num_value($b->{recv_mib_per_sec}) <=> num_value($a->{recv_mib_per_sec})
     } grep {
-      ($_->{benchmark} // '') eq 'network' && ($_->{scenario} // '') eq $scenario
+      value_or_default($_->{benchmark}, '') eq 'network'
+        && value_or_default($_->{scenario}, '') eq $scenario
     } @rows;
 
     my ($best_throughput, $best_latency);
@@ -356,12 +367,12 @@ sub generate_summary {
           )
       ), "\n";
 
-      next if ($row->{status} // '') ne 'pass';
+      next if value_or_default($row->{status}, '') ne 'pass';
       if (!defined $best_throughput
           || num_value($row->{recv_mib_per_sec}) > num_value($best_throughput->{recv_mib_per_sec})) {
         $best_throughput = $row;
       }
-      if (($row->{avg_write_us} // '') ne ''
+      if (value_or_default($row->{avg_write_us}, '') ne ''
           && (!defined $best_latency
               || num_value($row->{avg_write_us}) < num_value($best_latency->{avg_write_us}))) {
         $best_latency = $row;
@@ -616,7 +627,8 @@ sub run_network_case {
 }
 
 for my $scenario (@scenario_order) {
-  if (!$ipv6_enabled && ($scenario_args{$scenario} // '') =~ /(?:^|\s)-6(?:\s|$)/) {
+  if (!$ipv6_enabled
+      && value_or_default($scenario_args{$scenario}, '') =~ /(?:^|\s)-6(?:\s|$)/) {
     for my $backend (@backends) {
       print "[SKIP] $scenario backend=$backend (IPv6 loopback unavailable)\n";
       record_skip($scenario_type{$scenario}, $scenario, $backend, 'IPv6 loopback unavailable');
@@ -625,7 +637,7 @@ for my $scenario (@scenario_order) {
   }
 
   for my $backend (@backends) {
-    if (($scenario_type{$scenario} // '') eq 'stress') {
+    if (value_or_default($scenario_type{$scenario}, '') eq 'stress') {
       run_stress_case($scenario, $backend);
     } else {
       run_network_case($scenario, $backend);
