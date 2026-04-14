@@ -185,62 +185,28 @@ Pipe_Test: !PHARLAP !VxWorks
 Priority_Buffer_Test
 Priority_Reactor_Test: !ACE_FOR_TAO
 Priority_Task_Test
-Proactor_Contract_Test -t d:       !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
+Proactor_Contract_Test -t d:       !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
 Proactor_Contract_Test -t w:       !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO Win32
-Proactor_Contract_Test -t a:       !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Contract_Test -t i:       !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Contract_Test -t c:       !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Contract_Test -t s:       !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Contract_Test -t u:       !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
-Proactor_File_Test -t d:           !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
+Proactor_Contract_Test -t a:       !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
+Proactor_Contract_Test -t i:       !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
+Proactor_Contract_Test -t c:       !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
+Proactor_Contract_Test -t u:       !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
+Proactor_File_Test -t d:           !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
 Proactor_File_Test -t w:           !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO Win32
-Proactor_File_Test -t a:           !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_File_Test -t i:           !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_File_Test -t c:           !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_File_Test -t s:           !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_File_Test -t u:           !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
-Proactor_Scatter_Gather_Test -t d: !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
+Proactor_File_Test -t u:           !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
 Proactor_Scatter_Gather_Test -t w: !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO Win32
-Proactor_Scatter_Gather_Test -t a: !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Scatter_Gather_Test -t i: !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Scatter_Gather_Test -t c: !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Scatter_Gather_Test -t s: !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Scatter_Gather_Test -t u: !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
-Proactor_Stress_Test -t d:         !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Stress_Test -t w:         !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO Win32
-Proactor_Stress_Test -t a:         !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Stress_Test -t i:         !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Stress_Test -t c:         !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Stress_Test -t s:         !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Stress_Test -t u:         !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
-Proactor_Test -t d:                !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
+Proactor_Scatter_Gather_Test -t u: !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
+Proactor_Stress_Test -t d:         !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
+Proactor_Stress_Test -t u:         !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
+Proactor_Test -t d:                !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
 Proactor_Test -t w:                !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO Win32
-Proactor_Test -t a:                !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Test -t i:                !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Test -t c:                !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Test -t s:                !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Test -t u:                !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
-Proactor_Test_IPV6 -t d:           !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Test_IPV6 -t w:           !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO Win32
-Proactor_Test_IPV6 -t a:           !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Test_IPV6 -t i:           !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Test_IPV6 -t c:           !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Test_IPV6 -t s:           !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Test_IPV6 -t u:           !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
-Proactor_Timer_Test -t d:          !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Timer_Test -t w:          !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO Win32
-Proactor_Timer_Test -t a:          !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Timer_Test -t i:          !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Timer_Test -t c:          !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Timer_Test -t s:          !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_Timer_Test -t u:          !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
-Proactor_UDP_Test -t d:            !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
+Proactor_Test -t u:                !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
+Proactor_Test_IPV6 -t d:           !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
+Proactor_Test_IPV6 -t u:           !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
+Proactor_Timer_Test -t d:          !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
+Proactor_UDP_Test -t d:            !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
 Proactor_UDP_Test -t w:            !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO Win32
-Proactor_UDP_Test -t a:            !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_UDP_Test -t i:            !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_UDP_Test -t c:            !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_UDP_Test -t s:            !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO
-Proactor_UDP_Test -t u:            !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
+Proactor_UDP_Test -t u:            !Win32 !VxWorks !LynxOS !nsk !ACE_FOR_TAO !BAD_AIO uring
 Process_Env_Test: !VxWorks !PHARLAP
 Process_Test: !VxWorks !ACE_FOR_TAO !PHARLAP !Win32
 Process_Manager_Test: !VxWorks !ACE_FOR_TAO !PHARLAP

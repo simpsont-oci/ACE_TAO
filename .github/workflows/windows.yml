@@ -127,3 +127,22 @@ jobs:
       run: msbuild -maxcpucount -p:Platform=${{ matrix.BuildPlatform }} -p:Configuration=${{ matrix.BuildConfiguration }} ACE/tests/tests.sln
     - name: Build solution TAO/tests/IDL_Test/IDL_Test.sln
       run: msbuild -maxcpucount -p:Platform=${{ matrix.BuildPlatform }} -p:Configuration=${{ matrix.BuildConfiguration }} TAO/tests/IDL_Test/IDL_Test.sln
+    - name: Run Proactor Win32 smoke tests
+      if: matrix.name == 'VS2022Debug64Cxx17'
+      working-directory: ${{ env.ACE_ROOT }}/tests
+      shell: pwsh
+      run: |
+        $env:PATH = "${env:ACE_ROOT}\lib;${env:ACE_ROOT}\lib\${{ matrix.BuildPlatform }}\${{ matrix.BuildConfiguration }};${env:ACE_ROOT}\tests\${{ matrix.BuildPlatform }}\${{ matrix.BuildConfiguration }};$env:PATH"
+        perl run_test.pl -ExeSubDir "${{ matrix.BuildPlatform }}/${{ matrix.BuildConfiguration }}" -t `
+          "Proactor_Contract_Test -t w" `
+          "Proactor_File_Test -t w" `
+          "Proactor_Scatter_Gather_Test -t w" `
+          "Proactor_Test -t w" `
+          "Proactor_UDP_Test -t w"
+    - name: Upload Proactor Win32 smoke logs
+      if: always() && matrix.name == 'VS2022Debug64Cxx17'
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-proactor-win32-smoke
+        path: ${{ env.ACE_ROOT }}/tests/log
+        if-no-files-found: ignore
