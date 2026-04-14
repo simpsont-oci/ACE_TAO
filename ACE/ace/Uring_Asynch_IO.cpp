@@ -22,6 +22,110 @@
 
 ACE_BEGIN_VERSIONED_NAMESPACE_DECL
 
+namespace
+{
+  int
+  ace_uring_build_iovecs (ACE_Message_Block *message_block,
+                          size_t requested_bytes,
+                          bool write_operation,
+                          struct iovec *&iovec_array,
+                          unsigned int &iovec_count,
+                          size_t &prepared_bytes)
+  {
+    iovec_array = 0;
+    iovec_count = 0;
+    prepared_bytes = 0;
+
+    if (message_block == 0)
+      {
+        errno = EFAULT;
+        return -1;
+      }
+
+    for (ACE_Message_Block *mb = message_block;
+         mb != 0 && prepared_bytes < requested_bytes && iovec_count < ACE_IOV_MAX;
+         mb = mb->cont ())
+      {
+        size_t available = write_operation ? mb->length () : mb->space ();
+        if (available == 0)
+          continue;
+
+        size_t remaining = requested_bytes - prepared_bytes;
+        size_t len = available > remaining ? remaining : available;
+        if (len == 0)
+          break;
+
+        ++iovec_count;
+        prepared_bytes += len;
+      }
+
+    if (iovec_count == 0 || prepared_bytes == 0)
+      {
+        errno = EINVAL;
+        return -1;
+      }
+
+    ACE_NEW_RETURN (iovec_array, struct iovec[iovec_count], -1);
+
+    prepared_bytes = 0;
+    unsigned int index = 0;
+    for (ACE_Message_Block *mb = message_block;
+         mb != 0 && prepared_bytes < requested_bytes && index < iovec_count;
+         mb = mb->cont ())
+      {
+        size_t available = write_operation ? mb->length () : mb->space ();
+        if (available == 0)
+          continue;
+
+        size_t remaining = requested_bytes - prepared_bytes;
+        size_t len = available > remaining ? remaining : available;
+        iovec_array[index].iov_base = write_operation
+          ? static_cast<void *> (mb->rd_ptr ())
+          : static_cast<void *> (mb->wr_ptr ());
+        iovec_array[index].iov_len = len;
+        prepared_bytes += len;
+        ++index;
+      }
+
+    iovec_count = index;
+    return 0;
+  }
+
+  void
+  ace_uring_advance_read_chain (ACE_Message_Block *message_block,
+                                size_t bytes_transferred)
+  {
+    for (ACE_Message_Block *mb = message_block;
+         mb != 0 && bytes_transferred > 0;
+         mb = mb->cont ())
+      {
+        size_t len_part = mb->space ();
+        if (len_part > bytes_transferred)
+          len_part = bytes_transferred;
+
+        mb->wr_ptr (len_part);
+        bytes_transferred -= len_part;
+      }
+  }
+
+  void
+  ace_uring_advance_write_chain (ACE_Message_Block *message_block,
+                                 size_t bytes_transferred)
+  {
+    for (ACE_Message_Block *mb = message_block;
+         mb != 0 && bytes_transferred > 0;
+         mb = mb->cont ())
+      {
+        size_t len_part = mb->length ();
+        if (len_part > bytes_transferred)
+          len_part = bytes_transferred;
+
+        mb->rd_ptr (len_part);
+        bytes_transferred -= len_part;
+      }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Base Result
 // ---------------------------------------------------------------------------
@@ -31,7 +135,7 @@ ACE_Uring_Asynch_Result::ACE_Uring_Asynch_Result
    const void *act,
    ACE_HANDLE handle,
    u_long offset,
-  u_long offset_high,
+   u_long offset_high,
    ACE_Proactor *proactor)
   : handler_ (0),
     handler_proxy_ (handler_proxy),
@@ -353,7 +457,9 @@ ACE_Uring_Asynch_Read_Stream_Result::ACE_Uring_Asynch_Read_Stream_Result
    const void *act,
    ACE_Proactor *proactor,
    u_long offset,
-   u_long offset_high)
+   u_long offset_high,
+   bool vectored,
+   struct iovec *iovec)
   : ACE_Uring_Asynch_Result (handler_proxy,
                              act,
                              handle,
@@ -361,8 +467,15 @@ ACE_Uring_Asynch_Read_Stream_Result::ACE_Uring_Asynch_Read_Stream_Result
                              offset_high,
                              proactor),
     message_block_ (message_block),
-    bytes_to_read_ (bytes_to_read)
+    bytes_to_read_ (bytes_to_read),
+    vectored_ (vectored),
+    iovec_ (iovec)
 {
+}
+
+ACE_Uring_Asynch_Read_Stream_Result::~ACE_Uring_Asynch_Read_Stream_Result (void)
+{
+  delete [] this->iovec_;
 }
 
 size_t
@@ -392,7 +505,12 @@ ACE_Uring_Asynch_Read_Stream_Result::complete (size_t bytes_transferred,
   this->bytes_transferred_ = bytes_transferred;
   this->error_ = error;
   if (success && this->message_block_ != 0)
-    this->message_block_->wr_ptr (bytes_transferred);
+    {
+      if (this->vectored_)
+        ace_uring_advance_read_chain (this->message_block_, bytes_transferred);
+      else
+        this->message_block_->wr_ptr (bytes_transferred);
+    }
 
   ACE_Handler *handler = this->handler ();
   if (handler != 0)
@@ -443,6 +561,60 @@ ACE_Uring_Asynch_Read_Stream::read (ACE_Message_Block &message_block,
                         message_block.wr_ptr (),
                         (unsigned int) num_bytes_to_read,
                         0);
+  ::io_uring_sqe_set_data (sqe, result);
+  return this->queue_result (result);
+}
+
+int
+ACE_Uring_Asynch_Read_Stream::readv (ACE_Message_Block &message_block,
+                                     size_t num_bytes_to_read,
+                                     const void *act,
+                                     int,
+                                     int)
+{
+  struct iovec *iovec = 0;
+  unsigned int iovec_count = 0;
+  if (ace_uring_build_iovecs (&message_block,
+                              num_bytes_to_read,
+                              false,
+                              iovec,
+                              iovec_count,
+                              num_bytes_to_read) == -1)
+    return -1;
+
+  ACE_Uring_Asynch_Read_Stream_Result *result = 0;
+  ACE_NEW_NORETURN (result,
+                    ACE_Uring_Asynch_Read_Stream_Result (this->handler_proxy_,
+                                                         this->handle_,
+                                                         &message_block,
+                                                         num_bytes_to_read,
+                                                         act,
+                                                         this->proactor_,
+                                                         0,
+                                                         0,
+                                                         true,
+                                                         iovec));
+  if (result == 0)
+    {
+      delete [] iovec;
+      errno = ENOMEM;
+      return -1;
+    }
+
+  ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
+  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  if (!sqe)
+    {
+      delete result;
+      errno = EAGAIN;
+      return -1;
+    }
+
+  ::io_uring_prep_readv (sqe,
+                         this->handle_,
+                         iovec,
+                         iovec_count,
+                         0);
   ::io_uring_sqe_set_data (sqe, result);
   return this->queue_result (result);
 }
@@ -537,6 +709,80 @@ ACE_Uring_Asynch_Read_File::read (ACE_Message_Block &message_block,
   return this->queue_result (result);
 }
 
+int
+ACE_Uring_Asynch_Read_File::readv (ACE_Message_Block &message_block,
+                                   size_t num_bytes_to_read,
+                                   u_long offset,
+                                   u_long offset_high,
+                                   const void *act,
+                                   int,
+                                   int)
+{
+  struct iovec *iovec = 0;
+  unsigned int iovec_count = 0;
+  if (ace_uring_build_iovecs (&message_block,
+                              num_bytes_to_read,
+                              false,
+                              iovec,
+                              iovec_count,
+                              num_bytes_to_read) == -1)
+    return -1;
+
+  ACE_Uring_Asynch_Read_File_Result *result = 0;
+  ACE_NEW_NORETURN (result,
+                    ACE_Uring_Asynch_Read_File_Result (this->handler_proxy_,
+                                                       this->handle_,
+                                                       &message_block,
+                                                       num_bytes_to_read,
+                                                       act,
+                                                       this->proactor_,
+                                                       offset,
+                                                       offset_high,
+                                                       true,
+                                                       iovec));
+  if (result == 0)
+    {
+      delete [] iovec;
+      errno = ENOMEM;
+      return -1;
+    }
+
+  uint64_t full_offset = ((uint64_t)offset_high << 32) | offset;
+
+  ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
+  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  if (!sqe)
+    {
+      delete result;
+      errno = EAGAIN;
+      return -1;
+    }
+
+  ::io_uring_prep_readv (sqe,
+                         this->handle_,
+                         iovec,
+                         iovec_count,
+                         full_offset);
+  ::io_uring_sqe_set_data (sqe, result);
+  return this->queue_result (result);
+}
+
+int
+ACE_Uring_Asynch_Read_File::readv (ACE_Message_Block &message_block,
+                                   size_t num_bytes_to_read,
+                                   const void *act,
+                                   int priority,
+                                   int signal_number)
+{
+  return this->readv (message_block,
+                      num_bytes_to_read,
+                      0,
+                      0,
+                      act,
+                      priority,
+                      signal_number);
+}
+
 ACE_Uring_Asynch_Read_File_Result::ACE_Uring_Asynch_Read_File_Result
   (const ACE_Handler::Proxy_Ptr &handler_proxy,
    ACE_HANDLE handle,
@@ -545,7 +791,9 @@ ACE_Uring_Asynch_Read_File_Result::ACE_Uring_Asynch_Read_File_Result
    const void *act,
    ACE_Proactor *proactor,
    u_long offset,
-   u_long offset_high)
+   u_long offset_high,
+   bool vectored,
+   struct iovec *iovec)
   : ACE_Uring_Asynch_Read_Stream_Result (handler_proxy,
                                          handle,
                                          message_block,
@@ -553,7 +801,9 @@ ACE_Uring_Asynch_Read_File_Result::ACE_Uring_Asynch_Read_File_Result
                                          act,
                                          proactor,
                                          offset,
-                                         offset_high)
+                                         offset_high,
+                                         vectored,
+                                         iovec)
 {
 }
 
@@ -566,7 +816,12 @@ ACE_Uring_Asynch_Read_File_Result::complete (size_t bytes_transferred,
   this->bytes_transferred_ = bytes_transferred;
   this->error_ = error;
   if (success && this->message_block_ != 0)
-    this->message_block_->wr_ptr (bytes_transferred);
+    {
+      if (this->vectored_)
+        ace_uring_advance_read_chain (this->message_block_, bytes_transferred);
+      else
+        this->message_block_->wr_ptr (bytes_transferred);
+    }
 
   ACE_Handler *handler = this->handler ();
   if (handler != 0)
@@ -589,7 +844,9 @@ ACE_Uring_Asynch_Write_Stream_Result::ACE_Uring_Asynch_Write_Stream_Result
    const void *act,
    ACE_Proactor *proactor,
    u_long offset,
-   u_long offset_high)
+   u_long offset_high,
+   bool vectored,
+   struct iovec *iovec)
   : ACE_Uring_Asynch_Result (handler_proxy,
                              act,
                              handle,
@@ -597,8 +854,15 @@ ACE_Uring_Asynch_Write_Stream_Result::ACE_Uring_Asynch_Write_Stream_Result
                              offset_high,
                              proactor),
     message_block_ (message_block),
-    bytes_to_write_ (bytes_to_write)
+    bytes_to_write_ (bytes_to_write),
+    vectored_ (vectored),
+    iovec_ (iovec)
 {
+}
+
+ACE_Uring_Asynch_Write_Stream_Result::~ACE_Uring_Asynch_Write_Stream_Result (void)
+{
+  delete [] this->iovec_;
 }
 
 size_t
@@ -628,7 +892,12 @@ ACE_Uring_Asynch_Write_Stream_Result::complete (size_t bytes_transferred,
   this->bytes_transferred_ = bytes_transferred;
   this->error_ = error;
   if (success && this->message_block_ != 0)
-    this->message_block_->rd_ptr (bytes_transferred);
+    {
+      if (this->vectored_)
+        ace_uring_advance_write_chain (this->message_block_, bytes_transferred);
+      else
+        this->message_block_->rd_ptr (bytes_transferred);
+    }
 
   ACE_Handler *handler = this->handler ();
   if (handler != 0)
@@ -679,6 +948,60 @@ ACE_Uring_Asynch_Write_Stream::write (ACE_Message_Block &message_block,
                          message_block.rd_ptr (),
                          (unsigned int) bytes_to_write,
                          0);
+  ::io_uring_sqe_set_data (sqe, result);
+  return this->queue_result (result);
+}
+
+int
+ACE_Uring_Asynch_Write_Stream::writev (ACE_Message_Block &message_block,
+                                       size_t bytes_to_write,
+                                       const void *act,
+                                       int,
+                                       int)
+{
+  struct iovec *iovec = 0;
+  unsigned int iovec_count = 0;
+  if (ace_uring_build_iovecs (&message_block,
+                              bytes_to_write,
+                              true,
+                              iovec,
+                              iovec_count,
+                              bytes_to_write) == -1)
+    return -1;
+
+  ACE_Uring_Asynch_Write_Stream_Result *result = 0;
+  ACE_NEW_NORETURN (result,
+                    ACE_Uring_Asynch_Write_Stream_Result (this->handler_proxy_,
+                                                          this->handle_,
+                                                          &message_block,
+                                                          bytes_to_write,
+                                                          act,
+                                                          this->proactor_,
+                                                          0,
+                                                          0,
+                                                          true,
+                                                          iovec));
+  if (result == 0)
+    {
+      delete [] iovec;
+      errno = ENOMEM;
+      return -1;
+    }
+
+  ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
+  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  if (!sqe)
+    {
+      delete result;
+      errno = EAGAIN;
+      return -1;
+    }
+
+  ::io_uring_prep_writev (sqe,
+                          this->handle_,
+                          iovec,
+                          iovec_count,
+                          0);
   ::io_uring_sqe_set_data (sqe, result);
   return this->queue_result (result);
 }
@@ -773,6 +1096,80 @@ ACE_Uring_Asynch_Write_File::write (ACE_Message_Block &message_block,
   return this->queue_result (result);
 }
 
+int
+ACE_Uring_Asynch_Write_File::writev (ACE_Message_Block &message_block,
+                                     size_t bytes_to_write,
+                                     u_long offset,
+                                     u_long offset_high,
+                                     const void *act,
+                                     int,
+                                     int)
+{
+  struct iovec *iovec = 0;
+  unsigned int iovec_count = 0;
+  if (ace_uring_build_iovecs (&message_block,
+                              bytes_to_write,
+                              true,
+                              iovec,
+                              iovec_count,
+                              bytes_to_write) == -1)
+    return -1;
+
+  ACE_Uring_Asynch_Write_File_Result *result = 0;
+  ACE_NEW_NORETURN (result,
+                    ACE_Uring_Asynch_Write_File_Result (this->handler_proxy_,
+                                                        this->handle_,
+                                                        &message_block,
+                                                        bytes_to_write,
+                                                        act,
+                                                        this->proactor_,
+                                                        offset,
+                                                        offset_high,
+                                                        true,
+                                                        iovec));
+  if (result == 0)
+    {
+      delete [] iovec;
+      errno = ENOMEM;
+      return -1;
+    }
+
+  uint64_t full_offset = ((uint64_t)offset_high << 32) | offset;
+
+  ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
+  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  if (!sqe)
+    {
+      delete result;
+      errno = EAGAIN;
+      return -1;
+    }
+
+  ::io_uring_prep_writev (sqe,
+                          this->handle_,
+                          iovec,
+                          iovec_count,
+                          full_offset);
+  ::io_uring_sqe_set_data (sqe, result);
+  return this->queue_result (result);
+}
+
+int
+ACE_Uring_Asynch_Write_File::writev (ACE_Message_Block &message_block,
+                                     size_t bytes_to_write,
+                                     const void *act,
+                                     int priority,
+                                     int signal_number)
+{
+  return this->writev (message_block,
+                       bytes_to_write,
+                       0,
+                       0,
+                       act,
+                       priority,
+                       signal_number);
+}
+
 ACE_Uring_Asynch_Write_File_Result::ACE_Uring_Asynch_Write_File_Result
   (const ACE_Handler::Proxy_Ptr &handler_proxy,
    ACE_HANDLE handle,
@@ -781,7 +1178,9 @@ ACE_Uring_Asynch_Write_File_Result::ACE_Uring_Asynch_Write_File_Result
    const void *act,
    ACE_Proactor *proactor,
    u_long offset,
-   u_long offset_high)
+   u_long offset_high,
+   bool vectored,
+   struct iovec *iovec)
   : ACE_Uring_Asynch_Write_Stream_Result (handler_proxy,
                                           handle,
                                           message_block,
@@ -789,7 +1188,9 @@ ACE_Uring_Asynch_Write_File_Result::ACE_Uring_Asynch_Write_File_Result
                                           act,
                                           proactor,
                                           offset,
-                                          offset_high)
+                                          offset_high,
+                                          vectored,
+                                          iovec)
 {
 }
 
@@ -802,7 +1203,12 @@ ACE_Uring_Asynch_Write_File_Result::complete (size_t bytes_transferred,
   this->bytes_transferred_ = bytes_transferred;
   this->error_ = error;
   if (success && this->message_block_ != 0)
-    this->message_block_->rd_ptr (bytes_transferred);
+    {
+      if (this->vectored_)
+        ace_uring_advance_write_chain (this->message_block_, bytes_transferred);
+      else
+        this->message_block_->rd_ptr (bytes_transferred);
+    }
 
   ACE_Handler *handler = this->handler ();
   if (handler != 0)
@@ -1217,7 +1623,7 @@ ACE_Uring_Asynch_Write_Dgram_Result::remote_address (const ACE_Addr &addr)
 {
   if (addr.get_addr () == 0
       || addr.get_size () == 0
-      || addr.get_size () > sizeof (this->remote_addr_))
+      || static_cast<size_t>(addr.get_size ()) > sizeof (this->remote_addr_))
     {
       errno = EINVAL;
       return -1;

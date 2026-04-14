@@ -17,6 +17,22 @@
 #include "ace/OS_NS_sys_time.h"
 ACE_BEGIN_VERSIONED_NAMESPACE_DECL
 
+namespace
+{
+  unsigned
+  queued_sqes (const io_uring &ring)
+  {
+    // For non-SQPOLL rings, khead tracks how many SQEs the kernel has
+    // consumed from user space, so sqe_tail - *khead is the number of
+    // prepared but unsubmitted/unconsumed entries.  For SQPOLL, defer to
+    // liburing's helper because it uses the right acquire semantics.
+    if (ring.flags & IORING_SETUP_SQPOLL)
+      return ::io_uring_sq_ready (&ring);
+
+    return ring.sq.sqe_tail - *ring.sq.khead;
+  }
+}
+
 ACE_Uring_Proactor::ACE_Uring_Proactor (size_t entries)
   : ring_ ()
   , is_initialized_ (false)
@@ -184,6 +200,7 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
           static_cast<ACE_Uring_Asynch_Result *> (io_uring_cqe_get_data (cqe));
         error = (cqe->res < 0) ? -cqe->res : 0;
         bytes_transferred = (cqe->res > 0) ? cqe->res : 0;
+        ::io_uring_cqe_seen (&this->ring_, cqe);
       }
 
       {
@@ -195,21 +212,17 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
             if (owner != 0)
               owner->unregister_result (result);
           }
-
-        ACE_GUARD_RETURN (ACE_Thread_Mutex, cq_guard, this->cq_mutex_, -1);
-        ::io_uring_cqe_seen (&this->ring_, cqe);
       }
 
       ++processed;
 
-      if (result != 0)
-        {
-          // Call completion hook
-          result->complete (bytes_transferred,
-                            error == 0 ? 1 : 0,
-                            0, // No completion key
-                            error);
-        }
+      if (result == 0)
+        continue;
+
+      result->complete (bytes_transferred,
+                        error == 0 ? 1 : 0,
+                        0, // No completion key
+                        error);
     }
 
   return processed;
@@ -249,12 +262,12 @@ ACE_Uring_Proactor::submit_sqe_if_necessary (void)
   if (!this->is_initialized_)
     return -1;
 
-  const unsigned int ready = ::io_uring_sq_ready (&this->ring_);
+  const unsigned int ready = queued_sqes (this->ring_);
   if (ready == 0)
     return 0;
 
   if (ready < DEFAULT_SUBMIT_BATCH_SIZE
-      && ::io_uring_sq_space_left (&this->ring_) > 0)
+      && ready < this->ring_.sq.ring_entries)
     return 0;
 
   return ::io_uring_submit (&this->ring_);
@@ -265,7 +278,8 @@ ACE_Uring_Proactor::submit_pending_sqe (void)
 {
   if (!this->is_initialized_)
     return -1;
-  if (::io_uring_sq_ready (&this->ring_) == 0)
+
+  if (queued_sqes (this->ring_) == 0)
     return 0;
 
   return ::io_uring_submit (&this->ring_);
@@ -480,7 +494,8 @@ ACE_Uring_Proactor::post_wakeup_completions (int count)
   for (int i = 0; i < count; ++i)
     {
       struct io_uring_sqe *sqe = ::io_uring_get_sqe (&this->ring_);
-      if (!sqe) break;
+      if (!sqe)
+        break;
       ::io_uring_prep_nop (sqe);
       ::io_uring_sqe_set_data (sqe, 0);
     }

@@ -26,9 +26,8 @@
 
 #include "test_config.h"
 
-#if defined (ACE_HAS_WIN32_OVERLAPPED_IO)
-  // This currently only works on Win32 platforms (NT SP2 and above).
-  // Support for Unix platforms supporting POSIX aio calls should be added in future.
+#if defined (ACE_HAS_WIN32_OVERLAPPED_IO) || defined (ACE_HAS_AIO_CALLS)
+  // This requires an async Proactor backend with vectored stream/file I/O.
 
 #include "ace/Get_Opt.h"
 
@@ -130,6 +129,26 @@ free_chunks_chain (ACE_Message_Block *&mb)
 
   mb->release ();
   mb = 0;
+}
+
+static size_t
+output_write_size (ACE_Message_Block *mb)
+{
+#if defined (ACE_WIN32)
+  return mb->total_size ();
+#else
+  return mb->total_length ();
+#endif /* ACE_WIN32 */
+}
+
+static int
+output_write_uses_padding (void)
+{
+#if defined (ACE_WIN32)
+  return 1;
+#else
+  return 0;
+#endif /* ACE_WIN32 */
 }
 
 static int
@@ -698,11 +717,18 @@ Writer::on_delete_receiver ()
 void
 Writer::open (void)
 {
+#if defined (ACE_WIN32)
+  int output_open_flags = O_CREAT | _O_TRUNC | _O_WRONLY;
+#else
+  int output_open_flags = O_CREAT | O_TRUNC | O_WRONLY;
+#endif /* ACE_WIN32 */
+#if defined (ACE_WIN32)
+  output_open_flags |= FILE_FLAG_OVERLAPPED | FILE_FLAG_NO_BUFFERING;
+#endif /* ACE_WIN32 */
+
   // Open the file for output
   if (ACE_INVALID_HANDLE == (this->output_file_handle_ = ACE_OS::open (output_file,
-                                                                       O_CREAT | _O_TRUNC | _O_WRONLY |\
-                                                                       FILE_FLAG_OVERLAPPED |\
-                                                                       FILE_FLAG_NO_BUFFERING,
+                                                                       output_open_flags,
                                                                        ACE_DEFAULT_FILE_PERMS)))
     ACE_ERROR ((LM_ERROR,
                 ACE_TEXT ("%p\n"),
@@ -811,17 +837,18 @@ Writer::initiate_write_file (void)
   // update the remainders of the chains
   this->odd_chain_  = new_odd_chain_head;
   this->even_chain_ = new_even_chain_head;
-  size_t increment_writing_file_offset = united_mb->total_length ();
+  size_t increment_writing_file_offset = output_write_size (united_mb);
+  size_t logical_write_size = united_mb->total_length ();
 
   // Reconstruct the file
-  // Write the size, not the length, because we must write in chunks
-  // of <page size>
   ACE_DEBUG ((LM_DEBUG,
-              ACE_TEXT ("Writer::initiate_write_file: write %d bytes at %d\n"),
-              united_mb->total_size (),
-              this->writing_file_offset_));
+              ACE_TEXT ("Writer::initiate_write_file: write %d bytes at %d")
+              ACE_TEXT (" (logical %d)\n"),
+              increment_writing_file_offset,
+              this->writing_file_offset_,
+              logical_write_size));
   if (this->wf_.writev (*united_mb,
-                        united_mb->total_size (),
+                        increment_writing_file_offset,
                         this->writing_file_offset_) == -1)
     {
       free_chunks_chain (united_mb);
@@ -845,21 +872,61 @@ void
 Writer::handle_write_file (const ACE_Asynch_Write_File::Result &result)
 {
   ACE_Message_Block *mb = &result.message_block ();
+  size_t bytes_transferred = result.bytes_transferred ();
+  size_t bytes_requested = result.bytes_to_write ();
 
   ACE_DEBUG ((LM_DEBUG,
-              ACE_TEXT ("Writer::handle_write_file at offset %d wrote %d\n"),
-              this->reported_file_offset_,
-              result.bytes_transferred ()));
+              ACE_TEXT ("Writer::handle_write_file at offset %d wrote %d")
+              ACE_TEXT (" of %d bytes\n"),
+              result.offset (),
+              bytes_transferred,
+              bytes_requested));
+
+  if (result.error () != 0)
+    {
+      free_chunks_chain (mb);
+      --this->io_count_;
+
+      ACE_DEBUG ((LM_DEBUG,
+                  ACE_TEXT ("Writer::handle_write_file")
+                  ACE_TEXT (" - ending proactor event loop after write failure\n")));
+
+      ACE_Proactor::instance ()->end_event_loop ();
+      delete this;
+      return;
+    }
 
   this->reported_file_offset_ +=
-    static_cast<u_long> (result.bytes_transferred ());
+    static_cast<u_long> (bytes_transferred);
 
-  // Always truncate as required,
-  // because partial will always be the last write to a file
+  if (mb->total_length () != 0)
+    {
+      size_t retry_bytes = output_write_uses_padding ()
+        ? bytes_requested - bytes_transferred
+        : mb->total_length ();
+      u_long retry_offset =
+        result.offset () + static_cast<u_long> (bytes_transferred);
+
+      if (this->wf_.writev (*mb, retry_bytes, retry_offset) == -1)
+        {
+          free_chunks_chain (mb);
+          --this->io_count_;
+
+          ACE_DEBUG ((LM_DEBUG,
+                      ACE_TEXT ("Writer::handle_write_file")
+                      ACE_TEXT (" - ending proactor event loop after retry failure\n")));
+
+          ACE_Proactor::instance ()->end_event_loop ();
+          delete this;
+        }
+      return;
+    }
+
   ACE_Message_Block *last_mb = mb;
   last_chunk (mb, last_mb);
 
-  if (last_mb->space ())
+  if (output_write_uses_padding () &&
+      last_mb->space ())
     ACE_OS::truncate (output_file,
                       this->reported_file_offset_ -
                         static_cast<u_long> (last_mb->space ()));
@@ -1110,12 +1177,19 @@ Sender::open (ACE_HANDLE handle, ACE_Message_Block &)
 {
   this->socket_handle_[ODD] = handle;
 
+#if defined (ACE_WIN32)
+  int input_open_flags = _O_RDONLY;
+#else
+  int input_open_flags = O_RDONLY;
+#endif /* ACE_WIN32 */
+#if defined (ACE_WIN32)
+  input_open_flags |= FILE_FLAG_OVERLAPPED | FILE_FLAG_NO_BUFFERING;
+#endif /* ACE_WIN32 */
+
   // Open the input file
   if (ACE_INVALID_HANDLE == (this->input_file_handle_ =
                                ACE_OS::open (input_file,
-                                             _O_RDONLY |\
-                                             FILE_FLAG_OVERLAPPED |\
-                                             FILE_FLAG_NO_BUFFERING,
+                                             input_open_flags,
                                              ACE_DEFAULT_FILE_PERMS)))
     {
       ACE_ERROR ((LM_ERROR,
@@ -1389,6 +1463,18 @@ run_main (int argc, ACE_TCHAR *argv[])
   if (::parse_args (argc, argv) == -1)
     return -1;
 
+  if (!Proactor_Test_Backend::supports_scatter_gather (backend))
+    {
+      ACE_DEBUG ((LM_INFO,
+                  ACE_TEXT ("Asynchronous Scatter/Gather IO is unsupported ")
+                  ACE_TEXT ("for backend '%s'.\n")
+                  ACE_TEXT ("Proactor_Scatter_Gather_Test will not be run.\n"),
+                  Proactor_Test_Backend::name (
+                    Proactor_Test_Backend::concrete_type (backend))));
+      ACE_END_TEST;
+      return 0;
+    }
+
   ACE_Proactor *proactor = 0;
   if (Proactor_Test_Backend::create_proactor (backend, 128, proactor, true) != 0)
     {
@@ -1411,48 +1497,69 @@ run_main (int argc, ACE_TCHAR *argv[])
                 ACE_TEXT ("Running as server and client, page size %d\n"),
                 chunk_size));
 
-  Acceptor  acceptor;
-  Connector connector;
-  ACE_INET_Addr addr (port);
+  int run_status = 0;
+  {
+    Acceptor  acceptor;
+    Connector connector;
+    ACE_INET_Addr addr (port);
 
-  if (!client_only)
+    if (!client_only)
+      {
+        // Simplify, initial read with zero size
+        if (-1 == acceptor.open (addr, 0, 1))
+          {
+            ACE_TEST_ASSERT (0);
+            run_status = -1;
+          }
+      }
+
+    if (0 == run_status &&
+        !server_only)
+      {
+        if (-1 == connector.open (1, ACE_Proactor::instance ()))
+          {
+            ACE_TEST_ASSERT (0);
+            run_status = -1;
+          }
+
+        // connect to first destination
+        if (0 == run_status &&
+            addr.set (port, host, 1, addr.get_type ()) == -1)
+          {
+            ACE_ERROR ((LM_ERROR, ACE_TEXT ("%p\n"), host));
+            run_status = -1;
+          }
+
+        if (0 == run_status)
+          {
+            connector.set_address (addr);
+            if (-1 == connector.connect (addr))
+              {
+                ACE_TEST_ASSERT (0);
+                run_status = -1;
+              }
+          }
+      }
+
+    if (0 == run_status)
+      ACE_Proactor::instance ()->run_event_loop ();
+
+    // As Proactor event loop now is inactive it is safe to destroy all
+    // senders and acceptors before tearing the proactor down.
+    connector.stop ();
+    acceptor.stop ();
+  }
+
+  ACE_Proactor::close_singleton ();
+
+  if (run_status != 0)
     {
-      // Simplify, initial read with zero size
-      if (-1 == acceptor.open (addr, 0, 1))
-        {
-          ACE_TEST_ASSERT (0);
-          return -1;
-        }
+      if (!client_only)
+        ACE_OS::unlink (output_file);
+
+      ACE_END_TEST;
+      return -1;
     }
-
-  if (!server_only)
-    {
-      if (-1 == connector.open (1, ACE_Proactor::instance ()))
-        {
-          ACE_TEST_ASSERT (0);
-          return -1;
-        }
-
-      // connect to first destination
-      if (addr.set (port, host, 1, addr.get_type ()) == -1)
-        ACE_ERROR_RETURN ((LM_ERROR, ACE_TEXT ("%p\n"), host), -1);
-      connector.set_address (addr);
-      if (-1 == connector.connect (addr))
-        {
-          ACE_TEST_ASSERT (0);
-          return -1;
-        }
-    }
-
-  ACE_Proactor::instance ()->run_event_loop ();
-
-  // As Proactor event loop now is inactive it is safe to destroy all
-  // senders
-
-  connector.stop ();
-  acceptor.stop ();
-
-  ACE_Proactor::instance()->close_singleton ();
 
   // now compare the files - available only when on same machine
 
@@ -1514,4 +1621,4 @@ run_main (int, ACE_TCHAR *[])
   return 0;
 }
 
-#endif  /* ACE_HAS_WIN32_OVERLAPPED_IO */
+#endif  /* ACE_HAS_WIN32_OVERLAPPED_IO || ACE_HAS_AIO_CALLS */
