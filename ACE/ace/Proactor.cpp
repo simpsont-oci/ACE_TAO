@@ -6,6 +6,7 @@
 // calls.
 
 #include "ace/Auto_Ptr.h"
+#include "ace/Atomic_Op.h"
 #include "ace/Proactor_Impl.h"
 #include "ace/Object_Manager.h"
 #include "ace/Task_T.h"
@@ -86,10 +87,7 @@ protected:
   ACE_Proactor &proactor_;
 
   /// Flag used to indicate when we are shutting down.
-  int shutting_down_;
-
-  /// Serialize access to the shutdown flag between destroy() and svc().
-  ACE_Thread_Mutex shutting_down_lock_;
+  ACE_Atomic_Op<ACE_Thread_Mutex, int> shutting_down_;
 };
 
 ACE_Proactor_Timer_Handler::ACE_Proactor_Timer_Handler (ACE_Proactor &proactor)
@@ -107,10 +105,7 @@ ACE_Proactor_Timer_Handler::~ACE_Proactor_Timer_Handler (void)
 int
 ACE_Proactor_Timer_Handler::destroy (void)
 {
-  {
-    ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->shutting_down_lock_, -1);
-    this->shutting_down_ = 1;
-  }
+  this->shutting_down_ = 1;
 
   // Signal timer event.
   this->timer_event_.signal ();
@@ -131,16 +126,10 @@ ACE_Proactor_Timer_Handler::svc (void)
 {
   ACE_Time_Value relative_time;
   int result = 0;
-  int shutting_down = 0;
 
   for (;;)
     {
-      {
-        ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->shutting_down_lock_, -1);
-        shutting_down = this->shutting_down_;
-      }
-
-      if (shutting_down != 0)
+      if (this->shutting_down_.value () != 0)
         break;
 
       ACE_Time_Value *wait_time =
