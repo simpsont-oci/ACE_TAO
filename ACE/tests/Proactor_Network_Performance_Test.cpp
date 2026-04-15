@@ -1583,7 +1583,11 @@ namespace
         ACE_HANDLE client_handle = ACE_INVALID_HANDLE;
 
         ACE_SOCK_Dgram server_socket;
+#if defined (ACE_WIN32)
         ACE_SOCK_Dgram client_socket;
+#else
+        ACE_SOCK_CODgram client_socket;
+#endif /* ACE_WIN32 */
 
         if (server_socket.open (server_addr, config.family) != 0)
           {
@@ -1603,9 +1607,16 @@ namespace
                               -1);
           }
 
-        // The benchmark issues async datagram sends with an explicit peer
-        // address, so the client socket must remain unconnected on Windows.
+        // Win32 async datagram sends use the per-operation peer address.
+        // POSIX expects the connected datagram socket behavior used
+        // originally by this benchmark.
+#if defined (ACE_WIN32)
         if (client_socket.open (client_addr, config.family) != 0)
+#else
+        if (client_socket.open (server_addr,
+                                client_addr,
+                                config.family) != 0)
+#endif /* ACE_WIN32 */
           {
             task.stop ();
             ACE_ERROR_RETURN ((LM_ERROR,
