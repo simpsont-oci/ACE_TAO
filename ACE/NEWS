@@ -1,8 +1,9 @@
 USER VISIBLE CHANGES BETWEEN ACE-6.5.23 and ACE-6.5.24
 ======================================================
 
-. Updated Embarcadero C++ Builder support, the debug
-  configuration uses inlining
+. Updated Embarcadero C++ Builder support
+
+. Don't disable inlining in a debug build with Embarcadero C++ Builder compilers
 
 USER VISIBLE CHANGES BETWEEN ACE-6.5.22 and ACE-6.5.23
 ======================================================
