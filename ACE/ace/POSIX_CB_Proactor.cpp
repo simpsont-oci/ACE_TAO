@@ -11,13 +11,15 @@ ACE_BEGIN_VERSIONED_NAMESPACE_DECL
 
 ACE_POSIX_CB_Proactor::Notification_State::Notification_State (ACE_SYNCH_SEMAPHORE &sema)
   : sema_ (&sema),
-    pending_callbacks_ (0)
+    pending_callbacks_ (0),
+    ref_count_ (0)
 {
 }
 
 void
 ACE_POSIX_CB_Proactor::Notification_State::add_pending (void)
 {
+  this->add_ref ();
   ++this->pending_callbacks_;
 }
 
@@ -26,12 +28,26 @@ ACE_POSIX_CB_Proactor::Notification_State::complete_one (void)
 {
   this->sema_->release ();
   --this->pending_callbacks_;
+  this->remove_ref ();
 }
 
 long
 ACE_POSIX_CB_Proactor::Notification_State::pending (void) const
 {
   return this->pending_callbacks_.value ();
+}
+
+void
+ACE_POSIX_CB_Proactor::Notification_State::add_ref (void)
+{
+  ++this->ref_count_;
+}
+
+void
+ACE_POSIX_CB_Proactor::Notification_State::remove_ref (void)
+{
+  if (--this->ref_count_ == 0)
+    delete this;
 }
 
 ACE_POSIX_CB_Proactor::ACE_POSIX_CB_Proactor (size_t max_aio_operations)
@@ -41,6 +57,7 @@ ACE_POSIX_CB_Proactor::ACE_POSIX_CB_Proactor (size_t max_aio_operations)
     notification_state_ (0)
 {
   ACE_NEW (this->notification_state_, Notification_State (this->sema_));
+  this->notification_state_->add_ref ();
 
   // we should start pseudo-asynchronous accept task
   // one per all future acceptors
@@ -79,24 +96,23 @@ ACE_POSIX_CB_Proactor_aio_completion (sigval cb_data)
 int
 ACE_POSIX_CB_Proactor::close (void)
 {
-  const int result = ACE_POSIX_AIOCB_Proactor::close ();
+  int const result = ACE_POSIX_AIOCB_Proactor::close ();
 
   Notification_State *state = this->notification_state_;
   if (state != 0)
     {
-      const ACE_Time_Value settle_interval (0, 10000);
-      const size_t max_settle_attempts = 50;
+      this->notification_state_ = 0;
+
+      ACE_Time_Value const settle_interval (0, 10000);
+      size_t const max_settle_attempts = 50;
 
       for (size_t attempt = 0;
            state->pending () > 0 && attempt < max_settle_attempts;
            ++attempt)
         ACE_OS::sleep (settle_interval);
 
-      if (state->pending () == 0)
-        {
-          delete state;
-          this->notification_state_ = 0;
-        }
+      state->detach ();
+      state->remove_ref ();
     }
 
   return result;
@@ -117,10 +133,8 @@ ACE_POSIX_CB_Proactor::handle_events (void)
 }
 
 int
-ACE_POSIX_CB_Proactor::notify_completion (int sig_num)
+ACE_POSIX_CB_Proactor::notify_completion (int /* sig_num */)
 {
-  ACE_UNUSED_ARG (sig_num);
-
   return this->sema_.release();
 }
 
@@ -262,21 +276,22 @@ ACE_POSIX_CB_Proactor::start_aio (ACE_POSIX_Asynch_Result *result,
       return -1;
     }
 
-  const ssize_t slot = this->allocate_aio_slot (result);
+  ssize_t const slot = this->allocate_aio_slot (result);
   if (slot < 0)
     return -1;
 
-  const size_t index = static_cast<size_t> (slot);
+  size_t const index = static_cast<size_t> (slot);
   this->result_list_[index] = result;
   ++this->aiocb_list_cur_size_;
+
+  if (this->notification_state_ != 0)
+    this->notification_state_->add_pending ();
 
   ret_val = this->start_aio_i (result);
   switch (ret_val)
     {
     case 0:
       this->aiocb_list_[index] = result;
-      if (this->notification_state_ != 0)
-        this->notification_state_->add_pending ();
       return 0;
 
     case 1:
@@ -284,6 +299,8 @@ ACE_POSIX_CB_Proactor::start_aio (ACE_POSIX_Asynch_Result *result,
       return 0;
 
     default:
+      if (this->notification_state_ != 0)
+        this->notification_state_->complete_one ();
       break;
     }
 

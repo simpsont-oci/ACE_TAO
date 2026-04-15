@@ -84,7 +84,7 @@ int
 ACE_Uring_Proactor::handle_events (ACE_Time_Value &wait_time)
 {
   ACE_Countdown_Time countdown (&wait_time);
-  const int result = this->process_cqes (DEFAULT_CQE_BATCH_SIZE, &wait_time);
+  int const result = this->process_cqes (DEFAULT_CQE_BATCH_SIZE, &wait_time);
   return result > 0 ? 1 : result;
 }
 
@@ -160,6 +160,9 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
 
       {
         ACE_GUARD_RETURN (ACE_Thread_Mutex, guard, this->cq_mutex_, -1);
+
+        if (!this->is_initialized_)
+          return -1;
 
         if (should_wait)
           {
@@ -263,7 +266,7 @@ ACE_Uring_Proactor::submit_sqe_if_necessary (void)
   if (!this->is_initialized_)
     return -1;
 
-  const unsigned int ready = queued_sqes (this->ring_);
+  unsigned int const ready = queued_sqes (this->ring_);
   if (ready == 0)
     return 0;
 
@@ -576,6 +579,10 @@ int
 ACE_Uring_Proactor::post_wakeup_completions (int count)
 {
   ACE_GUARD_RETURN (ACE_Thread_Mutex, guard, this->sq_mutex_, -1);
+
+  if (!this->is_initialized_)
+    return -1;
+
   for (int i = 0; i < count; ++i)
     {
       struct io_uring_sqe *sqe = ::io_uring_get_sqe (&this->ring_);

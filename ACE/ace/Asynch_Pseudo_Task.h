@@ -65,6 +65,7 @@ protected:
   ACE_Atomic_Op<ACE_SYNCH_MUTEX, bool> started_;
 };
 
+
 ACE_END_VERSIONED_NAMESPACE_DECL
 
 #include /**/ "ace/post.h"
