@@ -692,7 +692,7 @@ namespace
           return;
         }
 
-      if (this->issue_read () != 0)
+      if (this->issue_read () == -1)
         {
           delete this;
           return;
@@ -839,7 +839,7 @@ namespace
       ACE_Message_Block *mb = 0;
       ACE_NEW_RETURN (mb, ACE_Message_Block (read_size), -1);
 
-      if (this->rs_.read (*mb, mb->space ()) != 0)
+      if (this->rs_.read (*mb, mb->space ()) == -1)
         {
           mb->release ();
           this->report_error (ACE_TEXT ("stream read issue"), ACE_OS::last_error ());
@@ -870,7 +870,7 @@ namespace
                           this->config_.payload_size);
           mb->wr_ptr (this->config_.payload_size);
 
-          if (this->ws_.write (*mb, this->config_.payload_size) != 0)
+          if (this->ws_.write (*mb, this->config_.payload_size) == -1)
             {
               mb->release ();
               this->report_error (ACE_TEXT ("stream write issue"), ACE_OS::last_error ());
@@ -974,7 +974,7 @@ namespace
           return;
         }
 
-      if (this->receive_enabled_ && this->issue_read () != 0)
+      if (this->receive_enabled_ && this->issue_read () == -1)
         {
           delete this;
           return;
@@ -1146,7 +1146,7 @@ namespace
       if (this->rs_.recv (mb,
                           bytes_received,
                           0,
-                          this->config_.family) != 0)
+                          this->config_.family) == -1)
         {
           mb->release ();
           this->report_error (ACE_TEXT ("dgram recv issue"), ACE_OS::last_error ());
@@ -1206,7 +1206,7 @@ namespace
 
           mb->wr_ptr (this->config_.payload_size);
 
-          if (this->ws_.send (mb, this->config_.payload_size, 0, this->peer_addr_) != 0)
+          if (this->ws_.send (mb, this->config_.payload_size, 0, this->peer_addr_) == -1)
             {
               mb->release ();
               this->report_error (ACE_TEXT ("dgram send issue"), ACE_OS::last_error ());
@@ -1583,7 +1583,7 @@ namespace
         ACE_HANDLE client_handle = ACE_INVALID_HANDLE;
 
         ACE_SOCK_Dgram server_socket;
-        ACE_SOCK_CODgram client_socket;
+        ACE_SOCK_Dgram client_socket;
 
         if (server_socket.open (server_addr, config.family) != 0)
           {
@@ -1603,9 +1603,9 @@ namespace
                               -1);
           }
 
-        if (client_socket.open (server_addr,
-                                client_addr,
-                                config.family) != 0)
+        // The benchmark issues async datagram sends with an explicit peer
+        // address, so the client socket must remain unconnected on Windows.
+        if (client_socket.open (client_addr, config.family) != 0)
           {
             task.stop ();
             ACE_ERROR_RETURN ((LM_ERROR,

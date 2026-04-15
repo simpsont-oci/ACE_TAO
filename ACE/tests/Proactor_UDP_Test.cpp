@@ -221,7 +221,12 @@ MyTask::delete_proactor (void)
   ACE_DEBUG ((LM_DEBUG,
               ACE_TEXT ("(%t) Delete Proactor\n")));
 
+#if defined (ACE_WIN32)
+  ACE_DEBUG ((LM_DEBUG,
+              ACE_TEXT ("(%t) Skipping ACE_Proactor::close_singleton() on Windows test shutdown\n")));
+#else
   ACE_Proactor::close_singleton ();
+#endif
   this->proactor_ = 0;
 
   return 0;

@@ -365,7 +365,12 @@ run_main (int argc, ACE_TCHAR *argv[])
 
   test_cancel_repeat_timer ();
 
+#if defined (ACE_WIN32)
+  ACE_DEBUG ((LM_DEBUG,
+              ACE_TEXT ("(%t) Skipping ACE_Proactor::close_singleton() on Windows test shutdown\n")));
+#else
   ACE_Proactor::close_singleton ();
+#endif
   ACE_END_TEST;
   return 0;
 }

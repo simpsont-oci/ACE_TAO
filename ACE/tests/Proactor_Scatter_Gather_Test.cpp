@@ -611,6 +611,9 @@ Acceptor::stop (void)
 {
   // This method can be called only after proactor event loop is done
   // in all threads.
+  this->reissue_accept (0);
+  (void) this->cancel ();
+
   for (int i = 0; i < RECEIVERS; ++i)
     {
       delete this->list_receivers_[i];
@@ -899,7 +902,7 @@ Writer::handle_write_file (const ACE_Asynch_Write_File::Result &result)
   this->reported_file_offset_ +=
     static_cast<u_long> (bytes_transferred);
 
-  if (mb->total_length () != 0)
+  if (bytes_transferred < bytes_requested)
     {
       size_t retry_bytes = output_write_uses_padding ()
         ? bytes_requested - bytes_transferred
@@ -1074,6 +1077,7 @@ Connector::stop (void)
 {
   // This method can be called only after proactor event loop is done
   // in all threads.
+  (void) this->cancel ();
 
   for (int i = 0; i < SENDERS; ++i)
     {
@@ -1505,8 +1509,18 @@ run_main (int argc, ACE_TCHAR *argv[])
 
     if (!client_only)
       {
-        // Simplify, initial read with zero size
-        if (-1 == acceptor.open (addr, 0, 1))
+        // This test needs exactly two accepted sockets. Avoid default
+        // reissue/backlog behavior so teardown does not leave surplus
+        // asynchronous accepts outstanding on Win32.
+        if (-1 == acceptor.open (addr,
+                                 0,
+                                 1,
+                                 RECEIVERS,
+                                 1,
+                                 ACE_Proactor::instance (),
+                                 false,
+                                 0,
+                                 RECEIVERS))
           {
             ACE_TEST_ASSERT (0);
             run_status = -1;

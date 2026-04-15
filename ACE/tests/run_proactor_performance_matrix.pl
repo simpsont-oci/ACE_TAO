@@ -8,10 +8,12 @@ use strict;
 use warnings;
 
 use Cwd qw(abs_path);
+use Encode qw(encode);
 use File::Basename qw(dirname);
 use File::Copy qw(copy);
 use File::Path qw(make_path);
 use Getopt::Long qw(GetOptions);
+use MIME::Base64 qw(encode_base64);
 use POSIX qw(WNOHANG strftime);
 use Text::ParseWords qw(shellwords);
 use Time::HiRes qw(sleep time);
@@ -28,13 +30,22 @@ my $run_id = $ENV{RUN_ID} || strftime('%Y%m%d-%H%M%S', localtime);
 my $run_dir = "$log_root/$run_id";
 my $results_tsv = "$run_dir/results.tsv";
 my $summary_txt = "$run_dir/summary.txt";
+my $is_windows = ($^O eq 'MSWin32') ? 1 : 0;
 
 $ENV{ACE_ROOT} = $ace_root;
-$ENV{LD_LIBRARY_PATH} = join(
-  ':',
-  grep { defined $_ && $_ ne '' }
-    ("$ace_root/lib", $script_dir, $ENV{LD_LIBRARY_PATH})
-);
+if ($is_windows) {
+  $ENV{PATH} = join(
+    ';',
+    grep { defined $_ && $_ ne '' }
+      ("$ace_root/lib", $script_dir, $ENV{PATH})
+  );
+} else {
+  $ENV{LD_LIBRARY_PATH} = join(
+    ':',
+    grep { defined $_ && $_ ne '' }
+      ("$ace_root/lib", $script_dir, $ENV{LD_LIBRARY_PATH})
+  );
+}
 
 my $network_timeout_secs = value_or_default($ENV{TIMEOUT_SECS_NETWORK}, 300);
 my $stress_timeout_secs = value_or_default($ENV{TIMEOUT_SECS_STRESS}, 120);
@@ -109,6 +120,24 @@ sub shell_quote {
   return "'$value'";
 }
 
+sub powershell_quote {
+  my ($value) = @_;
+  $value = '' if !defined $value;
+  $value =~ s/'/''/g;
+  return "'$value'";
+}
+
+sub candidate_backends {
+  return $is_windows ? qw(win32) : qw(aiocb sig cb uring);
+}
+
+sub resolve_test_binary {
+  my ($path) = @_;
+  return $path if -e $path;
+  return "$path.exe" if $is_windows && -e "$path.exe";
+  return $path;
+}
+
 sub interpret_wait_status {
   my ($status) = @_;
   return 255 if !defined $status;
@@ -116,8 +145,62 @@ sub interpret_wait_status {
   return $status >> 8;
 }
 
+sub run_command_with_timeout_windows {
+  my ($cmd_ref, $stdout_log, $timeout) = @_;
+
+  my $stderr_log = "$stdout_log.stderr";
+  unlink $stdout_log, $stderr_log;
+
+  my $arg_list = join(', ', map { powershell_quote($_) } @$cmd_ref[1 .. $#$cmd_ref]);
+  my $ps = join "\n",
+    "\$ErrorActionPreference = 'Stop'",
+    "\$ProgressPreference = 'SilentlyContinue'",
+    '$typeDef = "using System.Runtime.InteropServices; public static class CodexWindowsErrorMode { [DllImport(""kernel32.dll"")] public static extern uint SetErrorMode(uint mode); }"',
+    'Add-Type -TypeDefinition $typeDef | Out-Null',
+    '[CodexWindowsErrorMode]::SetErrorMode(0x0001 -bor 0x0002 -bor 0x8000) | Out-Null',
+    '$stdoutLog = ' . powershell_quote($stdout_log),
+    '$stderrLog = ' . powershell_quote($stderr_log),
+    '$workingDir = ' . powershell_quote($script_dir),
+    '$timeout = ' . int($timeout),
+    '$process = Start-Process -FilePath ' . powershell_quote($cmd_ref->[0])
+      . ' -ArgumentList @(' . $arg_list . ')'
+      . ' -WorkingDirectory $workingDir'
+      . ' -RedirectStandardOutput $stdoutLog'
+      . ' -RedirectStandardError $stderrLog'
+      . ' -PassThru',
+    'try {',
+    '  Wait-Process -Id $process.Id -Timeout $timeout -ErrorAction Stop',
+    '  $process.Refresh()',
+    '  $rc = [int]([uint32]$process.ExitCode)',
+    '} catch {',
+    '  Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue',
+    '  $rc = 124',
+    '}',
+    'if (Test-Path -LiteralPath $stderrLog) {',
+    '  if ((Get-Item -LiteralPath $stderrLog).Length -gt 0) {',
+    '    Get-Content -LiteralPath $stderrLog | Add-Content -LiteralPath $stdoutLog',
+    '  }',
+    '  Remove-Item -LiteralPath $stderrLog -Force -ErrorAction SilentlyContinue',
+    '}',
+    'exit $rc';
+  my $encoded_ps = encode_base64(encode('UTF-16LE', $ps), '');
+
+  system('powershell.exe',
+         '-NoProfile',
+         '-ExecutionPolicy',
+         'Bypass',
+         '-EncodedCommand',
+         $encoded_ps);
+
+  return interpret_wait_status($?);
+}
+
 sub run_command_with_timeout {
   my ($cmd_ref, $stdout_log, $timeout) = @_;
+
+  if ($is_windows) {
+    return run_command_with_timeout_windows($cmd_ref, $stdout_log, $timeout);
+  }
 
   my $pid = fork();
   if (!defined $pid) {
@@ -125,6 +208,10 @@ sub run_command_with_timeout {
   }
 
   if ($pid == 0) {
+    chdir $script_dir or do {
+      print STDERR "failed to chdir to $script_dir: $!\n";
+      exit 127;
+    };
     open STDOUT, '>', $stdout_log or do {
       print STDERR "failed to open $stdout_log: $!\n";
       exit 127;
@@ -290,6 +377,11 @@ sub extract_perf_lines {
 }
 
 sub ipv6_loopback_available {
+  if ($is_windows) {
+    my $status = system('ping', '-n', '1', '::1');
+    return $status == 0 ? 1 : 0;
+  }
+
   my $path = '/proc/net/if_inet6';
   return 0 if !-r $path;
 
@@ -417,20 +509,22 @@ require_file(
   "$ace_root/ace/config.h",
   "missing $ace_root/ace/config.h; build ACE before running the performance matrix",
 );
+if (!$is_windows) {
+  require_file(
+    "$ace_root/include/makeinclude/platform_macros.GNU",
+    "missing $ace_root/include/makeinclude/platform_macros.GNU; build ACE before running the performance matrix",
+  );
+}
 require_file(
-  "$ace_root/include/makeinclude/platform_macros.GNU",
-  "missing $ace_root/include/makeinclude/platform_macros.GNU; build ACE before running the performance matrix",
-);
-require_file(
-  "$script_dir/Proactor_Stress_Test",
+  resolve_test_binary("$script_dir/Proactor_Stress_Test"),
   "missing $script_dir/Proactor_Stress_Test; build the Proactor tests before running the matrix",
 );
 require_file(
-  "$script_dir/Proactor_Network_Performance_Test",
+  resolve_test_binary("$script_dir/Proactor_Network_Performance_Test"),
   "missing $script_dir/Proactor_Network_Performance_Test; build the Proactor tests before running the matrix",
 );
 
-my @backends = qw(aiocb sig cb uring);
+my @backends = candidate_backends();
 if (@requested_backends) {
   my @filtered_backends;
   for my $backend (@requested_backends) {
@@ -530,7 +624,7 @@ if ($list_only) {
 sub run_stress_case {
   my ($scenario, $backend) = @_;
 
-  my $binary = "$script_dir/Proactor_Stress_Test";
+  my $binary = resolve_test_binary("$script_dir/Proactor_Stress_Test");
   my $native_log = "$script_dir/log/Proactor_Stress_Test.log";
   my $stdout_log = "$run_dir/Proactor_Stress_Test.$backend.stdout-stderr.log";
   my $archived_native_log = "$run_dir/Proactor_Stress_Test.$backend.log";
@@ -579,7 +673,7 @@ sub run_stress_case {
 sub run_network_case {
   my ($scenario, $backend) = @_;
 
-  my $binary = "$script_dir/Proactor_Network_Performance_Test";
+  my $binary = resolve_test_binary("$script_dir/Proactor_Network_Performance_Test");
   my $native_log = "$script_dir/log/Proactor_Network_Performance_Test.log";
   my $stdout_log = "$run_dir/Proactor_Network_Performance_Test.$scenario.$backend.stdout-stderr.log";
   my $archived_native_log = "$run_dir/Proactor_Network_Performance_Test.$scenario.$backend.log";

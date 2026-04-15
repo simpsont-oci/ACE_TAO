@@ -8,10 +8,12 @@ use strict;
 use warnings;
 
 use Cwd qw(abs_path);
+use Encode qw(encode);
 use File::Basename qw(dirname);
 use File::Copy qw(copy);
 use File::Path qw(make_path);
 use Getopt::Long qw(GetOptions);
+use MIME::Base64 qw(encode_base64);
 use POSIX qw(WNOHANG strftime);
 use Text::ParseWords qw(shellwords);
 use Time::HiRes qw(sleep time);
@@ -27,13 +29,22 @@ my $log_dir = "$script_dir/log";
 my $matrix_root = "$log_dir/proactor_matrix";
 my $run_id = $ENV{RUN_ID} || strftime('%Y%m%d-%H%M%S', localtime);
 my $run_dir = "$matrix_root/$run_id";
+my $is_windows = ($^O eq 'MSWin32') ? 1 : 0;
 
 $ENV{ACE_ROOT} = $ace_root;
-$ENV{LD_LIBRARY_PATH} = join(
-  ':',
-  grep { defined $_ && $_ ne '' }
-    ("$ace_root/lib", $script_dir, $ENV{LD_LIBRARY_PATH})
-);
+if ($is_windows) {
+  $ENV{PATH} = join(
+    ';',
+    grep { defined $_ && $_ ne '' }
+      ("$ace_root/lib", $script_dir, $ENV{PATH})
+  );
+} else {
+  $ENV{LD_LIBRARY_PATH} = join(
+    ':',
+    grep { defined $_ && $_ ne '' }
+      ("$ace_root/lib", $script_dir, $ENV{LD_LIBRARY_PATH})
+  );
+}
 
 my $timeout_secs = value_or_default($ENV{TIMEOUT_SECS}, 180);
 my $base_port = value_or_default($ENV{BASE_PORT}, 20000);
@@ -94,6 +105,26 @@ sub shell_quote {
   return "'$value'";
 }
 
+sub powershell_quote {
+  my ($value) = @_;
+  $value = '' if !defined $value;
+  $value =~ s/'/''/g;
+  return "'$value'";
+}
+
+sub candidate_backends {
+  my @backends = $is_windows ? qw(win32) : qw(aiocb sig cb uring);
+  @backends = ('default', @backends) if $include_default;
+  return @backends;
+}
+
+sub resolve_test_binary {
+  my ($path) = @_;
+  return $path if -e $path;
+  return "$path.exe" if $is_windows && -e "$path.exe";
+  return $path;
+}
+
 sub backend_is_expected_fail {
   my ($backend) = @_;
   return $expected_fail_backends =~ /(?:^|\s)\Q$backend\E(?:\s|$)/ ? 1 : 0;
@@ -115,8 +146,62 @@ sub interpret_wait_status {
   return $status >> 8;
 }
 
+sub run_command_with_timeout_windows {
+  my ($cmd_ref, $stdout_log, $timeout) = @_;
+
+  my $stderr_log = "$stdout_log.stderr";
+  unlink $stdout_log, $stderr_log;
+
+  my $arg_list = join(', ', map { powershell_quote($_) } @$cmd_ref[1 .. $#$cmd_ref]);
+  my $ps = join "\n",
+    "\$ErrorActionPreference = 'Stop'",
+    "\$ProgressPreference = 'SilentlyContinue'",
+    '$typeDef = "using System.Runtime.InteropServices; public static class CodexWindowsErrorMode { [DllImport(""kernel32.dll"")] public static extern uint SetErrorMode(uint mode); }"',
+    'Add-Type -TypeDefinition $typeDef | Out-Null',
+    '[CodexWindowsErrorMode]::SetErrorMode(0x0001 -bor 0x0002 -bor 0x8000) | Out-Null',
+    '$stdoutLog = ' . powershell_quote($stdout_log),
+    '$stderrLog = ' . powershell_quote($stderr_log),
+    '$workingDir = ' . powershell_quote($script_dir),
+    '$timeout = ' . int($timeout),
+    '$process = Start-Process -FilePath ' . powershell_quote($cmd_ref->[0])
+      . ' -ArgumentList @(' . $arg_list . ')'
+      . ' -WorkingDirectory $workingDir'
+      . ' -RedirectStandardOutput $stdoutLog'
+      . ' -RedirectStandardError $stderrLog'
+      . ' -PassThru',
+    'try {',
+    '  Wait-Process -Id $process.Id -Timeout $timeout -ErrorAction Stop',
+    '  $process.Refresh()',
+    '  $rc = [int]([uint32]$process.ExitCode)',
+    '} catch {',
+    '  Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue',
+    '  $rc = 124',
+    '}',
+    'if (Test-Path -LiteralPath $stderrLog) {',
+    '  if ((Get-Item -LiteralPath $stderrLog).Length -gt 0) {',
+    '    Get-Content -LiteralPath $stderrLog | Add-Content -LiteralPath $stdoutLog',
+    '  }',
+    '  Remove-Item -LiteralPath $stderrLog -Force -ErrorAction SilentlyContinue',
+    '}',
+    'exit $rc';
+  my $encoded_ps = encode_base64(encode('UTF-16LE', $ps), '');
+
+  system('powershell.exe',
+         '-NoProfile',
+         '-ExecutionPolicy',
+         'Bypass',
+         '-EncodedCommand',
+         $encoded_ps);
+
+  return interpret_wait_status($?);
+}
+
 sub run_command_with_timeout {
   my ($cmd_ref, $stdout_log, $timeout) = @_;
+
+  if ($is_windows) {
+    return run_command_with_timeout_windows($cmd_ref, $stdout_log, $timeout);
+  }
 
   my $pid = fork();
   if (!defined $pid) {
@@ -124,6 +209,10 @@ sub run_command_with_timeout {
   }
 
   if ($pid == 0) {
+    chdir $script_dir or do {
+      print STDERR "failed to chdir to $script_dir: $!\n";
+      exit 127;
+    };
     open STDOUT, '>', $stdout_log or do {
       print STDERR "failed to open $stdout_log: $!\n";
       exit 127;
@@ -176,8 +265,7 @@ if (!$ok || $help) {
   exit($ok ? 0 : 2);
 }
 
-my @backends = qw(aiocb sig cb uring);
-@backends = ('default', @backends) if $include_default;
+my @backends = candidate_backends();
 
 if (@requested_backends) {
   my @filtered_backends;
@@ -238,10 +326,12 @@ require_file(
   "$ace_root/ace/config.h",
   "missing $ace_root/ace/config.h; configure ACE before running the matrix",
 );
-require_file(
-  "$ace_root/include/makeinclude/platform_macros.GNU",
-  "missing $ace_root/include/makeinclude/platform_macros.GNU; configure ACE before running the matrix",
-);
+if (!$is_windows) {
+  require_file(
+    "$ace_root/include/makeinclude/platform_macros.GNU",
+    "missing $ace_root/include/makeinclude/platform_macros.GNU; configure ACE before running the matrix",
+  );
+}
 
 make_path($log_dir, $run_dir);
 
@@ -275,7 +365,7 @@ sub run_case {
   my $case_label = $test_name;
   $case_label .= ':' . $variant if $variant ne '';
 
-  my $binary = "$script_dir/$test_name";
+  my $binary = resolve_test_binary("$script_dir/$test_name");
   my $native_log = "$log_dir/$test_name.log";
   my $archive_base = "$run_dir/$test_name";
   $archive_base .= ".$variant" if $variant ne '';
