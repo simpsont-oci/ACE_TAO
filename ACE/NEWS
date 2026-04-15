@@ -1,7 +1,8 @@
 USER VISIBLE CHANGES BETWEEN ACE-6.5.23 and ACE-6.5.24
 ======================================================
 
-. Extended Embarcadero C++ Builder support
+. Updated Embarcadero C++ Builder support, the debug
+  configuration uses inlining
 
 USER VISIBLE CHANGES BETWEEN ACE-6.5.22 and ACE-6.5.23
 ======================================================
