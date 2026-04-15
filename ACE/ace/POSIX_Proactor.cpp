@@ -1073,9 +1073,7 @@ ACE_POSIX_AIOCB_Proactor::handle_events (ACE_Time_Value &wait_time)
 int
 ACE_POSIX_AIOCB_Proactor::handle_events (void)
 {
-  // Avoid an unbounded wait here so the event loop can observe
-  // end_event_loop() even if the notify-pipe wakeup is lost.
-  return this->handle_events_i (1000);
+  return this->handle_events_i (ACE_INFINITE);
 }
 
 int
@@ -2112,8 +2110,9 @@ ACE_POSIX_Wakeup_Completion::complete (size_t       /* bytes_transferred */,
                                        const void * /* completion_key */,
                                        u_long       /*  error */)
 {
-  // This completion exists only to wake blocked event-loop threads.
-  // Once it reaches dispatch, the wakeup has already served its purpose.
+  ACE_Handler *handler = this->handler_proxy_.get ()->handler ();
+  if (handler != 0)
+    handler->handle_wakeup ();
 }
 
 ACE_END_VERSIONED_NAMESPACE_DECL

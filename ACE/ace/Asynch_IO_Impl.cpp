@@ -25,17 +25,12 @@ ACE_Asynch_Read_Stream_Impl::~ACE_Asynch_Read_Stream_Impl (void)
 }
 
 int
-ACE_Asynch_Read_Stream_Impl::readv (ACE_Message_Block &message_block,
-                                    size_t bytes_to_read,
-                                    const void *act,
-                                    int priority,
-                                    int signal_number)
+ACE_Asynch_Read_Stream_Impl::readv (ACE_Message_Block &/*message_block*/,
+                                    size_t /*bytes_to_read*/,
+                                    const void */*act*/,
+                                    int /*priority*/,
+                                    int /*signal_number*/)
 {
-  ACE_UNUSED_ARG (message_block);
-  ACE_UNUSED_ARG (bytes_to_read);
-  ACE_UNUSED_ARG (act);
-  ACE_UNUSED_ARG (priority);
-  ACE_UNUSED_ARG (signal_number);
   errno = ENOTSUP;
   return -1;
 }
@@ -49,17 +44,12 @@ ACE_Asynch_Write_Stream_Impl::~ACE_Asynch_Write_Stream_Impl (void)
 }
 
 int
-ACE_Asynch_Write_Stream_Impl::writev (ACE_Message_Block &message_block,
-                                      size_t bytes_to_write,
-                                      const void *act,
-                                      int priority,
-                                      int signal_number)
+ACE_Asynch_Write_Stream_Impl::writev (ACE_Message_Block &/*message_block*/,
+                                      size_t /*bytes_to_write*/,
+                                      const void */*act*/,
+                                      int /*priority*/,
+                                      int /*signal_number*/)
 {
-  ACE_UNUSED_ARG (message_block);
-  ACE_UNUSED_ARG (bytes_to_write);
-  ACE_UNUSED_ARG (act);
-  ACE_UNUSED_ARG (priority);
-  ACE_UNUSED_ARG (signal_number);
   errno = ENOTSUP;
   return -1;
 }
@@ -73,21 +63,14 @@ ACE_Asynch_Read_File_Impl::~ACE_Asynch_Read_File_Impl (void)
 }
 
 int
-ACE_Asynch_Read_File_Impl::readv (ACE_Message_Block &message_block,
-                                  size_t bytes_to_read,
-                                  u_long offset,
-                                  u_long offset_high,
-                                  const void *act,
-                                  int priority,
-                                  int signal_number)
+ACE_Asynch_Read_File_Impl::readv (ACE_Message_Block &/*message_block*/,
+                                  size_t /*bytes_to_read*/,
+                                  u_long /*offset*/,
+                                  u_long /*offset_high*/,
+                                  const void */*act*/,
+                                  int /*priority*/,
+                                  int /*signal_number*/)
 {
-  ACE_UNUSED_ARG (message_block);
-  ACE_UNUSED_ARG (bytes_to_read);
-  ACE_UNUSED_ARG (offset);
-  ACE_UNUSED_ARG (offset_high);
-  ACE_UNUSED_ARG (act);
-  ACE_UNUSED_ARG (priority);
-  ACE_UNUSED_ARG (signal_number);
   errno = ENOTSUP;
   return -1;
 }
@@ -113,21 +96,14 @@ ACE_Asynch_Write_File_Impl::~ACE_Asynch_Write_File_Impl (void)
 }
 
 int
-ACE_Asynch_Write_File_Impl::writev (ACE_Message_Block &message_block,
-                                    size_t bytes_to_write,
-                                    u_long offset,
-                                    u_long offset_high,
-                                    const void *act,
-                                    int priority,
-                                    int signal_number)
+ACE_Asynch_Write_File_Impl::writev (ACE_Message_Block &/*message_block*/,
+                                    size_t /*bytes_to_write*/,
+                                    u_long /*offset*/,
+                                    u_long /*offset_high*/,
+                                    const void */*act*/,
+                                    int /*priority*/,
+                                    int /*signal_number*/)
 {
-  ACE_UNUSED_ARG (message_block);
-  ACE_UNUSED_ARG (bytes_to_write);
-  ACE_UNUSED_ARG (offset);
-  ACE_UNUSED_ARG (offset_high);
-  ACE_UNUSED_ARG (act);
-  ACE_UNUSED_ARG (priority);
-  ACE_UNUSED_ARG (signal_number);
   errno = ENOTSUP;
   return -1;
 }

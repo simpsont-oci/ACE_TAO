@@ -87,13 +87,13 @@ protected:
   ACE_Proactor &proactor_;
 
   /// Flag used to indicate when we are shutting down.
-  ACE_Atomic_Op<ACE_Thread_Mutex, int> shutting_down_;
+  ACE_Atomic_Op<ACE_Thread_Mutex, bool> shutting_down_;
 };
 
 ACE_Proactor_Timer_Handler::ACE_Proactor_Timer_Handler (ACE_Proactor &proactor)
   : ACE_Task <ACE_NULL_SYNCH> (&proactor.thr_mgr_),
     proactor_ (proactor),
-    shutting_down_ (0)
+    shutting_down_ (false)
 {
 }
 
@@ -105,7 +105,7 @@ ACE_Proactor_Timer_Handler::~ACE_Proactor_Timer_Handler (void)
 int
 ACE_Proactor_Timer_Handler::destroy (void)
 {
-  this->shutting_down_ = 1;
+  this->shutting_down_ = true;
 
   // Signal timer event.
   this->timer_event_.signal ();
