@@ -1,0 +1,186 @@
+commit 80806ecb2fcece18ef64c88f3fa7e7f63e6bfa5c
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Apr 15 10:20:06 2026 +0200
+
+    Fix python3 warning
+    
+        * ACE/bin/make_release.py:
+    
+    (cherry picked from commit d1f9db7a5c96c8548c3a34f4b5b8480313895927)
+
+commit 6377bc2dcd5ce6007218d5125a2afa5eba4cb97d
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Apr 15 09:21:01 2026 +0200
+
+    Update NEWS
+
+commit 86ac2d0f0f5adb949f73858c1147e30814839860
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Apr 15 08:58:28 2026 +0200
+
+    Enhance Embarcadero C++ Builder support
+    
+    Updated the Embarcadero C++ Builder support to include inlining in the debug configuration.
+
+commit 9a42982361f3b9317a6aaefd804af04f0d8bd761
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Apr 15 08:57:12 2026 +0200
+
+    Update NEWS
+
+commit 5dff3e1ff5fd6f574fab6b443f8e86397d52abea
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Apr 8 13:02:38 2026 +0200
+
+    Backport #2523
+    
+        * TAO/tests/Transport_Idle_Timeout/Echo_i.cpp:
+        * TAO/tests/Transport_Idle_Timeout/Echo_i.h:
+        * TAO/tests/Transport_Idle_Timeout/Idle_Transport_Timeout.mpc:
+        * TAO/tests/Transport_Idle_Timeout/client.cpp:
+        * TAO/tests/Transport_Idle_Timeout/client_multiple.cpp:
+        * TAO/tests/Transport_Idle_Timeout/run_test.pl:
+        * TAO/tests/Transport_Idle_Timeout/server.cpp:
+        * TAO/tests/Transport_Idle_Timeout/svc.conf:
+        * TAO/tests/Transport_Idle_Timeout/svc_disabled.conf:
+        * TAO/tests/Transport_Idle_Timeout/test.idl:
+          Added.
+    
+        * ACE/ace/Event_Handler_Handle_Timeout_Upcall.cpp:
+        * ACE/ace/WFMO_Reactor.cpp:
+        * TAO/NEWS:
+        * TAO/bin/tao_orb_tests.lst:
+        * TAO/docs/Options.html:
+        * TAO/tao/Cache_Entries_T.inl:
+        * TAO/tao/Resource_Factory.h:
+        * TAO/tao/Transport.cpp:
+        * TAO/tao/Transport.h:
+        * TAO/tao/Transport_Cache_Manager_T.cpp:
+        * TAO/tao/Transport_Cache_Manager_T.h:
+        * TAO/tao/Transport_Cache_Manager_T.inl:
+        * TAO/tao/Transport_Connector.cpp:
+        * TAO/tao/Transport_Timer.cpp:
+        * TAO/tao/Transport_Timer.h:
+        * TAO/tao/default_resource.cpp:
+        * TAO/tao/default_resource.h:
+        * TAO/tao/tao.mpc:
+
+commit 67aa653ab3659aba925e653e0d4be213b8240e6d
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Thu Mar 12 08:05:25 2026 +0100
+
+    Minimal backport of https://github.com/DOCGroup/ACE_TAO/pull/2513
+    
+        * ACE/tests/Config_Test.cpp:
+
+commit d1e591121dedf6365d15c814079c83d7dbf8a920
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Tue Mar 10 14:32:46 2026 +0100
+
+    Update Compiler_Features_41_Test.cpp
+    
+    (cherry picked from commit 3ea48644c41b13b2a38c8886f08b32b715eb98c5)
+
+commit 0d7136b32c3354c94c74e6d134bb87931ec5a9d4
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Tue Mar 10 14:16:53 2026 +0100
+
+    Updated compiler 41 test, handle the exception thrown correctly
+    
+    (cherry picked from commit d795777ce47faffdbbd7a03d44c05b88939dc3e2)
+
+commit 6c26ad02556a12631525984fc285666042fbb67e
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Jan 7 08:38:34 2026 +0100
+
+    Use inlining also in a debug build
+    
+        * ACE/bin/MakeProjectCreator/config/acedefaults.mpb:
+
+commit 84d261f908bcd7f915ce2f0e39eceaf259f1d4ea
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Dec 17 14:16:00 2025 +0100
+
+    Add back debug message
+    
+        * ACE/tests/Reactor_Disp_Order_Test_Dev_Poll.cpp:
+    
+    (cherry picked from commit 0d601ed236179dcb24c19308665221d074ced410)
+
+commit ba4f49616adaf14136f380e1d2e9eb642e2950dc
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Dec 17 14:13:29 2025 +0100
+
+    Updated exe names
+    
+        * ACE/tests/.gitignore:
+    
+    (cherry picked from commit d828d2571978d5b67e3594bf16a364c1e1d3e417)
+
+commit a5fa88b99c9737f699a89468f136381c650d494e
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Dec 17 14:09:42 2025 +0100
+
+    only use one main
+    
+        * ACE/tests/Reactor_Disp_Order_Test_Dev_Poll.cpp:
+    
+    (cherry picked from commit ede6ba654287e9ffa572fa71306bccc34ef53f35)
+
+commit d6b04a21a4823f0999b97e4f5a2db96e374164fc
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Dec 17 14:04:59 2025 +0100
+
+    Shorten Dispatch to Disp, Dispatch triggers for a Win32 application the UAC installer protection, see https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-vista/cc709628(v=ws.10)?redirectedfrom=MSDN
+    
+        * ACE/tests/Reactor_Dispatch_Order_Test.cpp -> ACE/tests/Reactor_Disp_Order_Test.cpp:
+        * ACE/tests/Reactor_Dispatch_Order_Test_Dev_Poll.cpp -> ACE/tests/Reactor_Disp_Order_Test_Dev_Poll.cpp:
+          Moved.
+    
+        * ACE/tests/run_test.lst:
+        * ACE/tests/tests.mpc:
+    
+    (cherry picked from commit 7f80b0b2a1ea02af877fe4889a51eb31840bc608)
+
+commit 63eab10b9f8ba625ebb08b8512980103b75557eb
+Merge: afc9badc67e 30efd4359c5
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Thu Dec 11 17:12:04 2025 +0100
+
+    Merge pull request #2491 from jwillemsen/jwi-bcc32780
+    
+    Updated bcc32 compiler checks
+
+commit f833cec821401d4e9e7f5e094be1dfdcee57a431
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Thu Dec 11 14:29:38 2025 +0100
+
+    Updated bcc32 compiler checks
+    
+        * ACE/ace/Compression/rle/RLECompressor.cpp:
+        * ACE/ace/post.h:
+        * ACE/ace/pre.h:
+        * TAO/orbsvcs/orbsvcs/IFRService/IFR_Service_Utils_T.cpp:
+        * TAO/orbsvcs/orbsvcs/Notify/MonitorControlExt/MC_Default_Factory.h:
+        * TAO/orbsvcs/orbsvcs/Notify/RT_Factory.h:
+        * TAO/orbsvcs/tests/Notify/Bug_3252_Regression/server.cpp:
+        * TAO/tests/Bug_3574_Regression/test.cpp:
+
+commit afc9badc67e0a1c196a2e08919339a3ff7076f49
+Merge: a8293d786c3 8008adca3f6
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Tue Sep 9 08:42:37 2025 +0200
+
+    Merge pull request #2466 from jwillemsen/jwi-ace6524
+    
+    Update for next ACE6TAO2 release
+
+commit 8008adca3f6eb7d05ef49bf58f56ffc948be7b76
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Tue Sep 9 08:40:10 2025 +0200
+
+    Update for next ACE6TAO2 release
+    
+        * ACE/NEWS:
+        * ACE/bin/copy-local-script.sh:
+        * TAO/NEWS:

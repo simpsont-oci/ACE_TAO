@@ -1,0 +1,182 @@
+commit c836e5cc998da1d022f89bc618337049072810be
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Fri Apr 10 09:02:15 2026 +0200
+
+    use const
+    
+        * TAO/tests/Transport_Idle_Timeout/client.cpp:
+        * TAO/tests/Transport_Idle_Timeout/client_multiple.cpp:
+
+commit faf2cf29f6a45a2296f7e94947a3279ee22e3858
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Thu Apr 9 13:14:49 2026 +0200
+
+    Remove usage of nullptr
+    
+        * TAO/tests/Transport_Idle_Timeout/client.cpp:
+        * TAO/tests/Transport_Idle_Timeout/server.cpp:
+
+commit 6dabd95815c628039fb01bc3609d35c91d8c4dbc
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Thu Apr 9 11:03:39 2026 +0200
+
+    Remove C++11 feature
+    
+        * TAO/tao/Transport.cpp:
+
+commit c03956cfc456e1c73f457b611e199dcc552f3c94
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Thu Apr 9 08:22:48 2026 +0200
+
+    Removed not used arg
+    
+        * TAO/tests/Transport_Idle_Timeout/client.cpp:
+
+commit d64292c107967ee82da3592b77dd2e47eb4b6b47
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Thu Apr 9 08:22:14 2026 +0200
+
+    Removed double semicolon
+    
+        * TAO/tests/Transport_Idle_Timeout/client_multiple.cpp:
+
+commit 927b5cc9dcb5d83ce47012d86aeb917792f894f8
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Thu Apr 9 08:16:41 2026 +0200
+
+    Remove C++11 usage
+    
+        * TAO/tao/Transport_Idle_Timer.h:
+        * TAO/tao/Transport_Timer.h:
+
+commit 23a7c6f50d763c7790973c12c9953ac334c01628
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Apr 8 13:54:53 2026 +0200
+
+    Tets change, check size of cache before calling the second server
+    
+        * TAO/tests/Transport_Idle_Timeout/Echo_i.cpp:
+        * TAO/tests/Transport_Idle_Timeout/client_multiple.cpp:
+
+commit d6494ccb3452a6db168520eec42bf2d4feda3f9a
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Apr 8 13:36:54 2026 +0200
+
+    Add merge conflict rejected changes
+    
+        * TAO/tao/Transport.cpp:
+
+commit d5765fbb056d4858f5ebd0b9e8e70ec61a12eca9
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Apr 8 13:18:42 2026 +0200
+
+    Add new files
+    
+        * TAO/tao/Transport_Idle_Timer.cpp:
+        * TAO/tao/Transport_Idle_Timer.h:
+          Added.
+
+commit 5dff3e1ff5fd6f574fab6b443f8e86397d52abea
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Apr 8 13:02:38 2026 +0200
+
+    Backport #2523
+    
+        * TAO/tests/Transport_Idle_Timeout/Echo_i.cpp:
+        * TAO/tests/Transport_Idle_Timeout/Echo_i.h:
+        * TAO/tests/Transport_Idle_Timeout/Idle_Transport_Timeout.mpc:
+        * TAO/tests/Transport_Idle_Timeout/client.cpp:
+        * TAO/tests/Transport_Idle_Timeout/client_multiple.cpp:
+        * TAO/tests/Transport_Idle_Timeout/run_test.pl:
+        * TAO/tests/Transport_Idle_Timeout/server.cpp:
+        * TAO/tests/Transport_Idle_Timeout/svc.conf:
+        * TAO/tests/Transport_Idle_Timeout/svc_disabled.conf:
+        * TAO/tests/Transport_Idle_Timeout/test.idl:
+          Added.
+    
+        * ACE/ace/Event_Handler_Handle_Timeout_Upcall.cpp:
+        * ACE/ace/WFMO_Reactor.cpp:
+        * TAO/NEWS:
+        * TAO/bin/tao_orb_tests.lst:
+        * TAO/docs/Options.html:
+        * TAO/tao/Cache_Entries_T.inl:
+        * TAO/tao/Resource_Factory.h:
+        * TAO/tao/Transport.cpp:
+        * TAO/tao/Transport.h:
+        * TAO/tao/Transport_Cache_Manager_T.cpp:
+        * TAO/tao/Transport_Cache_Manager_T.h:
+        * TAO/tao/Transport_Cache_Manager_T.inl:
+        * TAO/tao/Transport_Connector.cpp:
+        * TAO/tao/Transport_Timer.cpp:
+        * TAO/tao/Transport_Timer.h:
+        * TAO/tao/default_resource.cpp:
+        * TAO/tao/default_resource.h:
+        * TAO/tao/tao.mpc:
+
+commit 3a8ee5d4b96189188e4e8ab819d977a081ee33c2
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Dec 17 17:37:45 2025 +0100
+
+    Rename 'Updates' to 'Upd' in .gitignore
+    
+    Removed 'Updates' entry and renamed it to 'Upd' to avoid Windows UAC issues.
+
+commit 3817a55eee9e36a2aa08598344474ade9c71bfb0
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Wed Dec 17 14:52:29 2025 +0100
+
+    Rename Updates to Upd to not let windows UAC block this test from starting
+    
+        * TAO/orbsvcs/tests/Notify/Basic/.gitignore:
+        * TAO/orbsvcs/tests/Notify/Basic/Basic.mpc:
+        * TAO/orbsvcs/tests/Notify/Basic/README:
+        * TAO/orbsvcs/tests/Notify/Basic/run_test.pl:
+        * TAO/orbsvcs/tests/Notify/Basic/run_test_ipv6.pl:
+    
+    (cherry picked from commit 292ef3041ea78853451cb24db19c4b237345fd44)
+    
+    # Conflicts:
+    #       TAO/orbsvcs/tests/Notify/Basic/.gitignore
+
+commit 63eab10b9f8ba625ebb08b8512980103b75557eb
+Merge: afc9badc67e 30efd4359c5
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Thu Dec 11 17:12:04 2025 +0100
+
+    Merge pull request #2491 from jwillemsen/jwi-bcc32780
+    
+    Updated bcc32 compiler checks
+
+commit f833cec821401d4e9e7f5e094be1dfdcee57a431
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Thu Dec 11 14:29:38 2025 +0100
+
+    Updated bcc32 compiler checks
+    
+        * ACE/ace/Compression/rle/RLECompressor.cpp:
+        * ACE/ace/post.h:
+        * ACE/ace/pre.h:
+        * TAO/orbsvcs/orbsvcs/IFRService/IFR_Service_Utils_T.cpp:
+        * TAO/orbsvcs/orbsvcs/Notify/MonitorControlExt/MC_Default_Factory.h:
+        * TAO/orbsvcs/orbsvcs/Notify/RT_Factory.h:
+        * TAO/orbsvcs/tests/Notify/Bug_3252_Regression/server.cpp:
+        * TAO/tests/Bug_3574_Regression/test.cpp:
+
+commit afc9badc67e0a1c196a2e08919339a3ff7076f49
+Merge: a8293d786c3 8008adca3f6
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Tue Sep 9 08:42:37 2025 +0200
+
+    Merge pull request #2466 from jwillemsen/jwi-ace6524
+    
+    Update for next ACE6TAO2 release
+
+commit 8008adca3f6eb7d05ef49bf58f56ffc948be7b76
+Author: Johnny Willemsen <jwillemsen@remedy.nl>
+Date:   Tue Sep 9 08:40:10 2025 +0200
+
+    Update for next ACE6TAO2 release
+    
+        * ACE/NEWS:
+        * ACE/bin/copy-local-script.sh:
+        * TAO/NEWS:
