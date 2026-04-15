@@ -53,6 +53,12 @@ public:
   int
   Connect();
 
+  int
+  start_timer (const ACE_Time_Value &interval);
+
+  void
+  shutdown (void);
+
   // This method will be called when an asynchronous read
   // completes on a file.
   virtual void
@@ -71,7 +77,12 @@ public:
   ACE_Asynch_Read_File reader_;
   ACE_Asynch_Write_File writer_;
 private:
+  void
+  cancel_timer (void);
+
   int   block_count_;
+  long  timer_id_;
+  bool  shutting_down_;
 #if defined (ACE_WIN32)
   bool  read_pending_;
 #endif
@@ -82,6 +93,8 @@ private:
 FileIOHandler::FileIOHandler ()
   : ACE_Handler ()
   , block_count_ (0)
+  , timer_id_ (-1)
+  , shutting_down_ (false)
 #if defined (ACE_WIN32)
   , read_pending_ (false)
 #endif
@@ -200,6 +213,31 @@ int FileIOHandler::Connect()
   return result;
 }
 
+int
+FileIOHandler::start_timer (const ACE_Time_Value &interval)
+{
+  this->timer_id_ =
+    ACE_Proactor::instance ()->schedule_repeating_timer (*this, 0, interval);
+  return this->timer_id_ == -1 ? -1 : 0;
+}
+
+void
+FileIOHandler::cancel_timer (void)
+{
+  if (this->timer_id_ != -1)
+    {
+      ACE_Proactor::instance ()->cancel_timer (this->timer_id_);
+      this->timer_id_ = -1;
+    }
+}
+
+void
+FileIOHandler::shutdown (void)
+{
+  this->shutting_down_ = true;
+  this->cancel_timer ();
+}
+
 //***************************************************************************
 //
 //    Method:          handle_read_file
@@ -215,6 +253,14 @@ void
 FileIOHandler::handle_read_file(const ACE_Asynch_Read_File::Result &result)
 {
   ACE_Message_Block &mb = result.message_block();
+  if (this->shutting_down_)
+  {
+    mb.release();
+#if defined (ACE_WIN32)
+    this->read_pending_ = false;
+#endif
+    return;
+  }
   // If the read failed, queue up another one using the same message block
   if (!result.success() || result.bytes_transferred() == 0)
   {
@@ -263,6 +309,7 @@ FileIOHandler::handle_read_file(const ACE_Asynch_Read_File::Result &result)
     else
     {
       // we have it all; stop the proactor
+      this->shutdown ();
       ACE_Proactor::instance ()->proactor_end_event_loop ();
     }
   }
@@ -286,6 +333,10 @@ FileIOHandler::handle_write_file(const ACE_Asynch_Write_File::Result &result)
   // When the write completes, we get the message block. It's been sent,
   // so we just deallocate it.
   result.message_block().release();
+  if (this->shutting_down_)
+  {
+    return;
+  }
 #if defined (ACE_WIN32)
   // to circumvent problems on older Win32 (see above) we schedule a read here if none
   // is pending yet.
@@ -324,6 +375,11 @@ FileIOHandler::handle_write_file(const ACE_Asynch_Write_File::Result &result)
 void
 FileIOHandler::handle_time_out(const ACE_Time_Value & /*tv*/, const void * /*act*/)
 {
+  if (this->shutting_down_ || this->block_count_ >= 16)
+  {
+    return;
+  }
+
   // do not schedule more than 16 writes
   if (this->block_count_ < 16)
   {
@@ -345,6 +401,10 @@ FileIOHandler::handle_time_out(const ACE_Time_Value & /*tv*/, const void * /*act
     {
       ACE_DEBUG((LM_INFO, ACE_TEXT("Successfully queued write of %d bytes\n"), new_mb->length ())); // success
       this->block_count_ ++; // next block
+      if (this->block_count_ >= 16)
+      {
+        this->cancel_timer ();
+      }
     }
     else
     {
@@ -400,16 +460,23 @@ run_main(int argc, ACE_TCHAR *argv[])
         // start the repeating timer for data transmission
 
         ACE_Time_Value repeatTime(0, 50000); // 0.05 second time interval
-        ACE_Proactor::instance()->schedule_repeating_timer(fileIOHandler,
-                                                           (void *) (100),
-                                                           repeatTime);
+        if (fileIOHandler.start_timer (repeatTime) != 0)
+          rc = 1;
 
-        // Run the Proactor
-        ACE_Proactor::instance()->proactor_run_event_loop();
+        if (rc == 0)
+          // Run the Proactor
+          ACE_Proactor::instance()->proactor_run_event_loop();
       }
+
+    fileIOHandler.shutdown ();
   }
 
+#if defined (ACE_WIN32)
+  ACE_DEBUG ((LM_DEBUG,
+              ACE_TEXT ("(%t) Skipping ACE_Proactor::close_singleton() on Windows test shutdown\n")));
+#else
   ACE_Proactor::close_singleton ();
+#endif
   ACE_END_TEST;
 
   return rc;

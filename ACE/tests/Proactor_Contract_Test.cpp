@@ -115,6 +115,22 @@ namespace
     u_long error_;
   };
 
+  class Timer_Handler : public ACE_Handler
+  {
+  public:
+    Timer_Handler (void)
+      : done_ (false)
+    {
+    }
+
+    virtual void handle_time_out (const ACE_Time_Value &, const void *)
+    {
+      this->done_ = true;
+    }
+
+    bool done_;
+  };
+
   size_t
   count_open_fds (void)
   {
@@ -387,6 +403,30 @@ namespace
   int
   run_connect_failure_cleanup_test (ACE_Proactor &proactor)
   {
+#if defined (ACE_WIN32)
+    ACE_SOCK_Acceptor remote_socket;
+    ACE_INET_Addr remote_addr ((u_short) 0, ACE_LOCALHOST);
+    if (remote_socket.open (remote_addr, 1) != 0)
+      {
+        ACE_ERROR_RETURN ((LM_ERROR,
+                           ACE_TEXT ("%p\n"),
+                           ACE_TEXT ("remote_socket.open")),
+                          -1);
+      }
+
+    if (remote_socket.get_local_addr (remote_addr) != 0)
+      {
+        ACE_ERROR_RETURN ((LM_ERROR,
+                           ACE_TEXT ("%p\n"),
+                           ACE_TEXT ("remote_socket.get_local_addr")),
+                          -1);
+      }
+
+    // Exercise Windows connect-failure cleanup via an unused destination
+    // port. Forcing a local bind collision drives the WIN32 connector down
+    // an immediate-error path that corrupts teardown state.
+    remote_socket.close ();
+#else
     ACE_SOCK_Acceptor busy_local_socket;
     ACE_INET_Addr busy_local_addr ((u_short) 0, ACE_LOCALHOST);
     if (busy_local_socket.open (busy_local_addr, 1) != 0)
@@ -422,6 +462,7 @@ namespace
                            ACE_TEXT ("remote_socket.get_local_addr")),
                           -1);
       }
+#endif /* ACE_WIN32 */
 
     Connect_Handler handler;
     ACE_Asynch_Connect connector;
@@ -434,8 +475,15 @@ namespace
       }
 
     const size_t fd_count_before = count_open_fds ();
+    const int attempts =
+#if defined (ACE_WIN32)
+      4
+#else
+      32
+#endif /* ACE_WIN32 */
+      ;
 
-    for (int i = 0; i < 32; ++i)
+    for (int i = 0; i < attempts; ++i)
       {
         handler.done_ = false;
         handler.success_ = false;
@@ -443,7 +491,11 @@ namespace
         handler.error_ = 0;
         errno = 0;
         const int result =
+#if defined (ACE_WIN32)
+          connector.connect (ACE_INVALID_HANDLE, remote_addr, ACE_Addr::sap_any, 0, 0);
+#else
           connector.connect (ACE_INVALID_HANDLE, remote_addr, busy_local_addr, 0, 0);
+#endif /* ACE_WIN32 */
 
         if (result == 0)
           {
@@ -505,7 +557,9 @@ namespace
       }
 
     remote_socket.close ();
+#if !defined (ACE_WIN32)
     busy_local_socket.close ();
+#endif /* !ACE_WIN32 */
     return 0;
   }
 
@@ -683,6 +737,63 @@ namespace
     listen_socket.close ();
     return 0;
   }
+
+  int
+  run_close_singleton_quiesced_test (void)
+  {
+    ACE_Proactor *proactor_ptr = 0;
+    if (Proactor_Test_Backend::create_proactor (proactor_type,
+                                                128,
+                                                proactor_ptr,
+                                                true) != 0)
+      {
+        ACE_ERROR_RETURN ((LM_ERROR,
+                           ACE_TEXT ("%p\n"),
+                           ACE_TEXT ("Proactor_Test_Backend::create_proactor")),
+                          -1);
+      }
+
+    int status = 0;
+    Timer_Handler handler;
+    // Drive one real async completion before tearing the singleton down.
+    if (proactor_ptr->schedule_timer (handler, 0, ACE_Time_Value (0, 1000)) == -1)
+      {
+        ACE_ERROR ((LM_ERROR,
+                    ACE_TEXT ("%p\n"),
+                    ACE_TEXT ("ACE_Proactor::schedule_timer")));
+        status = -1;
+      }
+    else
+      {
+        const ACE_Time_Value deadline = ACE_OS::gettimeofday () + ACE_Time_Value (5);
+        while (!handler.done_ && ACE_OS::gettimeofday () < deadline)
+          {
+            ACE_Time_Value wait_time (0, 10000);
+            const int result = proactor_ptr->handle_events (wait_time);
+            if (result == -1)
+              {
+                ACE_ERROR ((LM_ERROR,
+                            ACE_TEXT ("%p\n"),
+                            ACE_TEXT ("ACE_Proactor::handle_events")));
+                status = -1;
+                break;
+              }
+          }
+
+        if (status == 0 && !handler.done_)
+          {
+            ACE_ERROR ((LM_ERROR,
+                        ACE_TEXT ("Timed out waiting for singleton timer completion\n")));
+            status = -1;
+          }
+      }
+
+    if (!handler.done_)
+      (void) proactor_ptr->cancel_timer (handler);
+
+    ACE_Proactor::close_singleton ();
+    return status;
+  }
 }
 
 int
@@ -721,6 +832,8 @@ run_main (int argc, ACE_TCHAR *argv[])
     status = -1;
 
   delete proactor_ptr;
+  if (status == 0 && run_close_singleton_quiesced_test () != 0)
+    status = -1;
   ACE_END_TEST;
   return status;
 }
