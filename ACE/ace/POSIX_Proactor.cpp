@@ -1182,11 +1182,21 @@ ACE_POSIX_AIOCB_Proactor::handle_events_i (u_long milli_seconds)
   int retval= 0;
   aiocb **wait_list = 0;
   size_t wait_list_size = 0;
+  bool retry_deferred = false;
 
   ACE_MT (ACE_GUARD_RETURN (ACE_Thread_Mutex, dispatch_guard, this->dispatch_mutex_, -1));
 
   {
     ACE_MT (ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->mutex_, -1));
+
+    if (this->num_deferred_aiocb_ != 0)
+      {
+        // AIO queue overflow can defer socket operations until resources
+        // free up. If we then block forever on the notify pipe AIO alone,
+        // those deferred operations never get another chance to start.
+        this->start_deferred_aio ();
+        retry_deferred = (this->num_deferred_aiocb_ != 0);
+      }
 
     wait_list_size = this->num_started_aio_;
 
@@ -1209,7 +1219,7 @@ ACE_POSIX_AIOCB_Proactor::handle_events_i (u_long milli_seconds)
 
   if (wait_list_size != 0)
     {
-      if (milli_seconds == ACE_INFINITE)
+      if (milli_seconds == ACE_INFINITE && !retry_deferred)
         // Indefinite blocking.
         result_suspend = aio_suspend (wait_list,
                                       wait_list_size,
@@ -1217,9 +1227,12 @@ ACE_POSIX_AIOCB_Proactor::handle_events_i (u_long milli_seconds)
       else
         {
           // Block on <aio_suspend> for <milli_seconds>
+          u_long suspend_millis =
+            (milli_seconds == ACE_INFINITE) ? 10 : milli_seconds;
           timespec timeout;
-          timeout.tv_sec = milli_seconds / 1000;
-          timeout.tv_nsec = (milli_seconds - (timeout.tv_sec * 1000)) * 1000000;
+          timeout.tv_sec = suspend_millis / 1000;
+          timeout.tv_nsec =
+            (suspend_millis - (timeout.tv_sec * 1000)) * 1000000;
           result_suspend = aio_suspend (wait_list,
                                         wait_list_size,
                                         &timeout);
@@ -1403,6 +1416,10 @@ ACE_POSIX_AIOCB_Proactor::start_aio (ACE_POSIX_Asynch_Result *result,
     {
     case 0:     // started OK
       aiocb_list_[index] = result;
+      // Wake any thread blocked in aio_suspend() on an older snapshot of
+      // the active AIO set so it rebuilds the wait list to include this
+      // newly started operation.
+      this->notify_completion (result->signal_number ());
       return 0;
 
     case 1:     // OS AIO queue overflow
@@ -2110,9 +2127,10 @@ ACE_POSIX_Wakeup_Completion::complete (size_t       /* bytes_transferred */,
                                        const void * /* completion_key */,
                                        u_long       /*  error */)
 {
-  ACE_Handler *handler = this->handler_proxy_.get ()->handler ();
-  if (handler != 0)
-    handler->handle_wakeup ();
+  // These completions are posted only to wake a blocked POSIX event-loop
+  // thread. post_wakeup_completions() constructs them with a null handler
+  // proxy, so dispatch is intentionally a no-op once the wakeup has been
+  // observed.
 }
 
 ACE_END_VERSIONED_NAMESPACE_DECL

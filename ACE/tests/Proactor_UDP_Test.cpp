@@ -697,197 +697,170 @@ struct Session_Data
 // clear it!). So, this bit of messiness is necessary for portability.
 // When the Master is destroyed, it will try to stop establishing sessions
 // but this will only work on Windows.
-class Master : public ACE_Handler
+class Master : public ACE_Task<ACE_MT_SYNCH>
 {
 public:
   Master (TestData *tester, const ACE_INET_Addr &recv_addr, int expected);
   ~Master (void);
 
   void shutdown (void);
-
-  // Called when dgram receive operation completes.
-  virtual void handle_read_dgram (const ACE_Asynch_Read_Dgram::Result &result);
+  virtual int svc (void);
 
 private:
-  void start_recv (void);
+  void handle_session (const Session_Data &session);
 
   TestData *tester_;
   ACE_INET_Addr recv_addr_;
   ACE_SOCK_Dgram sock_;
-  ACE_Asynch_Read_Dgram rd_;
-  ACE_Message_Block *mb_;
   ACE_Atomic_Op<ACE_SYNCH_MUTEX, int> sessions_expected_;
-  ACE_Atomic_Op<ACE_SYNCH_MUTEX, int> recv_in_progress_;
   ACE_Atomic_Op<ACE_SYNCH_MUTEX, int> shutting_down_;
+  int thread_started_;
 };
 
 // *************************************************************
 Master::Master (TestData *tester, const ACE_INET_Addr &recv_addr, int expected)
   : tester_ (tester),
     recv_addr_ (recv_addr),
-    mb_ (0),
     sessions_expected_ (expected),
-    recv_in_progress_ (0),
-    shutting_down_ (0)
+    shutting_down_ (0),
+    thread_started_ (0)
 {
   if (this->sock_.open (recv_addr) == -1)
     ACE_ERROR ((LM_ERROR, ACE_TEXT ("Master socket %p\n"), ACE_TEXT ("open")));
-  else
+  else if (this->activate (THR_NEW_LWP, 1) == -1)
     {
-      if (this->rd_.open (*this, this->sock_.get_handle ()) == -1)
-        ACE_ERROR ((LM_ERROR,
-                    ACE_TEXT ("Master reader %p\n"),
-                    ACE_TEXT ("open")));
-      this->mb_ = new ACE_Message_Block (sizeof (Session_Data));
-      start_recv ();
+      ACE_ERROR ((LM_ERROR,
+                  ACE_TEXT ("Master activate %p\n"),
+                  ACE_TEXT ("activate")));
+      this->sock_.close ();
     }
+  else
+    this->thread_started_ = 1;
 }
 
 Master::~Master (void)
 {
   this->shutdown ();
 
-  if (this->mb_ != 0)
-    {
-      this->mb_->release ();
-      this->mb_ = 0;
-    }
+  if (this->thread_started_ != 0 && this->wait () == -1)
+    ACE_ERROR ((LM_ERROR,
+                ACE_TEXT ("Master wait %p\n"),
+                ACE_TEXT ("wait")));
+
+  this->sock_.close ();
 }
 
 void
 Master::shutdown (void)
 {
   this->shutting_down_ = 1;
+}
 
-  if (this->recv_in_progress_.value () != 0)
-    this->rd_.cancel ();
+int
+Master::svc (void)
+{
+  ACE_Time_Value timeout (1);
 
-  this->sock_.close ();
+  while (this->shutting_down_.value () == 0
+         && this->sessions_expected_.value () > 0)
+    {
+      Session_Data session;
+      ACE_INET_Addr remote_addr;
+      ssize_t received = this->sock_.recv (&session,
+                                           sizeof (session),
+                                           remote_addr,
+                                           0,
+                                           &timeout);
+
+      if (received == -1)
+        {
+          if (ACE_OS::last_error () == ETIME)
+            continue;
+
+          ACE_ERROR ((LM_ERROR, ACE_TEXT ("(%t) Master %p\n"), ACE_TEXT ("recv")));
+          continue;
+        }
+
+      if (static_cast<size_t> (received) != sizeof (Session_Data))
+        {
+          ACE_ERROR ((LM_ERROR,
+                      ACE_TEXT ("(%t) Master session data expected %B bytes; ")
+                      ACE_TEXT ("received %b\n"),
+                      sizeof (Session_Data),
+                      received));
+          continue;
+        }
+
+      this->handle_session (session);
+    }
+
+  return 0;
 }
 
 void
-Master::handle_read_dgram (const ACE_Asynch_Read_Dgram::Result &result)
+Master::handle_session (const Session_Data &session)
 {
-  this->recv_in_progress_ = 0;
-
-  // We should only receive Start datagrams with valid addresses to reply to.
-  if (result.success ())
+  if (session.direction_ == 0)
     {
-      if (result.bytes_transferred () != sizeof (Session_Data))
-        ACE_ERROR ((LM_ERROR,
-                    ACE_TEXT ("(%t) Master session data expected %B bytes; ")
-                    ACE_TEXT ("received %B\n"),
-                    sizeof (Session_Data),
-                    result.bytes_transferred ()));
+      ACE_INET_Addr client_addr, me_addr;
+      ACE_TCHAR client_str[80], me_str[80];
+      client_addr.set ((u_short)session.port_, session.addr_, 0);
+      client_addr.addr_to_string (client_str, 80);
+
+      // Set up the local and remote addresses. This is the socket that
+      // the session will run over. The addressing info to be sent back to
+      // the Client goes over the well-known receive socket to ensure the
+      // reply is sent to the client that initiated the session.
+      ACE_SOCK_CODgram sock;
+      if (sock.open (client_addr) == -1)
+        {
+          ACE_ERROR ((LM_ERROR,
+                      ACE_TEXT ("(%t) Master new socket for ")
+                      ACE_TEXT ("client %s: %p\n"),
+                      client_str,
+                      ACE_TEXT ("open")));
+        }
       else
         {
-          ACE_Message_Block *mb = result.message_block ();
-          Session_Data *session =
-            reinterpret_cast<Session_Data*>(mb->rd_ptr ());
-          if (session->direction_ == 0)
+          sock.get_local_addr (me_addr);
+          me_addr.addr_to_string (me_str, 80);
+          ACE_DEBUG ((LM_DEBUG,
+                      ACE_TEXT ("(%t) Master setting up server for ")
+                      ACE_TEXT ("local %s, peer %s\n"),
+                      me_str,
+                      client_str));
+
+          Session_Data ack;
+          ack.direction_ = 1;   // Ack
+          ack.addr_ = ACE_HTONL (me_addr.get_ip_address ());
+          ack.port_ = ACE_HTONS (me_addr.get_port_number ());
+          if (this->sock_.send (&ack,
+                                sizeof (ack),
+                                client_addr) == -1)
             {
-              ACE_INET_Addr client_addr, me_addr;
-              ACE_TCHAR client_str[80], me_str[80];
-              client_addr.set ((u_short)session->port_, session->addr_, 0);
-              client_addr.addr_to_string (client_str, 80);
-
-              // Set up the local and remote addresses - need fully-specified
-              // addresses to use UDP aio on Linux. This is the socket that
-              // the session will run over. The addressing info to be sent
-              // back to the Client will be sent over the receive socket
-              // to ensure it goes back to the client initiating the session.
-              ACE_SOCK_CODgram sock;
-              if (sock.open (client_addr) == -1)
-                {
-                  ACE_ERROR ((LM_ERROR,
-                              ACE_TEXT ("(%t) Master new socket for ")
-                              ACE_TEXT ("client %s: %p\n"),
-                              client_str,
-                              ACE_TEXT ("open")));
-                }
-              else
-                {
-                  sock.get_local_addr (me_addr);
-                  me_addr.addr_to_string (me_str, 80);
-                  ACE_DEBUG ((LM_DEBUG,
-                              ACE_TEXT ("(%t) Master setting up server for ")
-                              ACE_TEXT ("local %s, peer %s\n"),
-                              me_str,
-                              client_str));
-
-                  Session_Data session;
-                  session.direction_ = 1;   // Ack
-                  session.addr_ = ACE_HTONL (me_addr.get_ip_address ());
-                  session.port_ = ACE_HTONS (me_addr.get_port_number ());
-                  if (this->sock_.send (&session,
-                                        sizeof (session),
-                                        client_addr) == -1)
-                    {
-                      ACE_ERROR ((LM_ERROR,
-                                  ACE_TEXT ("(%t) Master reply %p\n"),
-                                  ACE_TEXT ("send")));
-                      sock.close ();
-                    }
-                  else
-                    {
-                      Server *server = this->tester_->server_up ();
-                      server->go (sock.get_handle (), client_addr);
-                    }
-                }
-              if (--this->sessions_expected_ == 0)
-                {
-                  ACE_DEBUG ((LM_DEBUG,
-                              ACE_TEXT ("All expected sessions are up\n")));
-                }
+              ACE_ERROR ((LM_ERROR,
+                          ACE_TEXT ("(%t) Master reply %p\n"),
+                          ACE_TEXT ("send")));
+              sock.close ();
             }
           else
             {
-              ACE_ERROR ((LM_ERROR,
-                          ACE_TEXT ("(%t) Badly formed Session request\n")));
+              Server *server = this->tester_->server_up ();
+              server->go (sock.get_handle (), client_addr);
             }
+        }
+
+      if (--this->sessions_expected_ == 0)
+        {
+          ACE_DEBUG ((LM_DEBUG,
+                      ACE_TEXT ("All expected sessions are up\n")));
         }
     }
   else
     {
-      ACE_Log_Priority prio = LM_ERROR;
-#if defined (ACE_WIN32)
-      if (result.error () == ERROR_OPERATION_ABORTED)
-        prio = LM_DEBUG;
-#else
-      if (result.error () == ECANCELED)
-        prio = LM_DEBUG;
-#endif /* ACE_WIN32 */
-      // Multiple steps to log the error without squashing errno.
-      ACE_LOG_MSG->conditional_set (__FILE__,
-                                    __LINE__,
-                                    -1,
-                                    (int)(result.error ()));
-      ACE_LOG_MSG->log (prio,
-                        ACE_TEXT ("(%t) Master %p\n"),
-                        ACE_TEXT ("recv"));
-      // If canceled, don't try to restart.
-      if (prio == LM_DEBUG)
-        return;
+      ACE_ERROR ((LM_ERROR,
+                  ACE_TEXT ("(%t) Badly formed Session request\n")));
     }
-
-  if (this->shutting_down_.value () != 0)
-    return;
-
-  this->start_recv ();
-}
-
-void
-Master::start_recv (void)
-{
-  if (this->mb_ == 0)
-    return;
-
-  size_t unused = 0;
-  this->mb_->reset ();
-  if (this->rd_.recv (this->mb_, unused, 0) == -1)
-    ACE_ERROR ((LM_ERROR, ACE_TEXT ("(%t) Master %p\n"), ACE_TEXT ("recv")));
-  else
-    this->recv_in_progress_ = 1;
 }
 
 // ***************************************************

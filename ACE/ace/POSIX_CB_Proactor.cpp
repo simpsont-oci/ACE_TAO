@@ -26,7 +26,12 @@ ACE_POSIX_CB_Proactor::Notification_State::add_pending (void)
 void
 ACE_POSIX_CB_Proactor::Notification_State::complete_one (void)
 {
-  this->sema_->release ();
+  {
+    ACE_GUARD (ACE_Thread_Mutex, ace_mon, this->mutex_);
+    if (this->sema_ != 0)
+      this->sema_->release ();
+  }
+
   --this->pending_callbacks_;
   this->remove_ref ();
 }
@@ -48,6 +53,13 @@ ACE_POSIX_CB_Proactor::Notification_State::remove_ref (void)
 {
   if (--this->ref_count_ == 0)
     delete this;
+}
+
+void
+ACE_POSIX_CB_Proactor::Notification_State::detach (void)
+{
+  ACE_GUARD (ACE_Thread_Mutex, ace_mon, this->mutex_);
+  this->sema_ = 0;
 }
 
 ACE_POSIX_CB_Proactor::ACE_POSIX_CB_Proactor (size_t max_aio_operations)
