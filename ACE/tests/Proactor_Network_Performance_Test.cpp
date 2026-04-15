@@ -32,6 +32,7 @@
 #include "ace/SOCK_Connector.h"
 #include "ace/SOCK_Dgram.h"
 #include "ace/SOCK_Stream.h"
+#include "ace/Sock_Connect.h"
 #include "ace/Task.h"
 #include "ace/Thread_Mutex.h"
 #include "ace/Time_Value.h"
@@ -1716,6 +1717,15 @@ run_main (int argc, ACE_TCHAR *argv[])
       const int rc = print_usage (argv[0]);
       ACE_END_TEST;
       return rc;
+    }
+
+  if (config.family == AF_INET6 && !ACE::ipv6_enabled ())
+    {
+      ACE_DEBUG ((LM_INFO,
+                  ACE_TEXT ("IPv6 is not supported by ACE on this platform.\n")
+                  ACE_TEXT ("Proactor_Network_Performance_Test (IPv6) will not be run.\n")));
+      ACE_END_TEST;
+      return 0;
     }
 
   int rc = 0;
