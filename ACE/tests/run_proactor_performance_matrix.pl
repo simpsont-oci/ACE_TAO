@@ -127,8 +127,22 @@ sub powershell_quote {
   return "'$value'";
 }
 
+sub has_io_uring {
+  return 0 if $is_windows;
+  if (-e "$ace_root/ace/config.h") {
+    open my $fh, '<', "$ace_root/ace/config.h" or return 0;
+    while (<$fh>) {
+      return 1 if /^\s*#\s*define\s+ACE_HAS_IO_URING/;
+    }
+    close $fh;
+  }
+  return 0;
+}
+
 sub candidate_backends {
-  return $is_windows ? qw(win32) : qw(aiocb sig cb uring);
+  my @backends = $is_windows ? qw(win32) : qw(aiocb sig cb);
+  push @backends, 'uring' if has_io_uring();
+  return @backends;
 }
 
 sub resolve_test_binary {
@@ -642,6 +656,17 @@ sub run_stress_case {
       or die "copy $native_log -> $archived_native_log failed: $!";
   }
 
+  if ($rc == 0 && -f $archived_native_log) {
+    open my $fh, '<', $archived_native_log;
+    my $content = do { local $/; <$fh> };
+    close $fh;
+    if ($content =~ /IPv6 is not supported by ACE on this platform/i) {
+      print "[SKIP] $scenario backend=$backend (IPv6 not supported by ACE)\n";
+      record_skip('network', $scenario, $backend, 'IPv6 not supported by ACE');
+      return;
+    }
+  }
+
   if ($rc != 0) {
     print "[FAIL] $scenario backend=$backend rc=$rc\n";
     record_failure('stress', $scenario, $backend, $stdout_log, $archived_native_log);
@@ -692,6 +717,17 @@ sub run_network_case {
   if (-f $native_log) {
     copy($native_log, $archived_native_log)
       or die "copy $native_log -> $archived_native_log failed: $!";
+  }
+
+  if ($rc == 0 && -f $archived_native_log) {
+    open my $fh, '<', $archived_native_log;
+    my $content = do { local $/; <$fh> };
+    close $fh;
+    if ($content =~ /IPv6 is not supported by ACE on this platform/i) {
+      print "[SKIP] $scenario backend=$backend (IPv6 not supported by ACE)\n";
+      record_skip('network', $scenario, $backend, 'IPv6 not supported by ACE');
+      return;
+    }
   }
 
   if ($rc != 0) {

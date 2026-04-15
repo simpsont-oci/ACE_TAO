@@ -1821,8 +1821,12 @@ run_main (int argc, ACE_TCHAR *argv[])
       ACE_OS::sleep (3);
 
       ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("(%t) Sleeping til sessions run down.\n")));
-      while (!test.testing_done ())
+      ACE_Time_Value limit = ACE_OS::gettimeofday () + ACE_Time_Value (30);
+      while (!test.testing_done () && ACE_OS::gettimeofday () < limit)
         ACE_OS::sleep (1);
+
+      if (!test.testing_done ())
+        ACE_ERROR ((LM_ERROR, ACE_TEXT ("(%t) Timed out waiting for sessions to run down.\n")));
 
       test.stop_all ();
 

@@ -112,8 +112,21 @@ sub powershell_quote {
   return "'$value'";
 }
 
+sub has_io_uring {
+  return 0 if $is_windows;
+  if (-e "$ace_root/ace/config.h") {
+    open my $fh, '<', "$ace_root/ace/config.h" or return 0;
+    while (<$fh>) {
+      return 1 if /^\s*#\s*define\s+ACE_HAS_IO_URING/;
+    }
+    close $fh;
+  }
+  return 0;
+}
+
 sub candidate_backends {
-  my @backends = $is_windows ? qw(win32) : qw(aiocb sig cb uring);
+  my @backends = $is_windows ? qw(win32) : qw(aiocb sig cb);
+  push @backends, 'uring' if has_io_uring();
   @backends = ('default', @backends) if $include_default;
   return @backends;
 }
