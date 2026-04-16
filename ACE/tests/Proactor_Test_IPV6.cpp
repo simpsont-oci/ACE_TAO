@@ -1830,7 +1830,26 @@ run_main (int argc, ACE_TCHAR *argv[])
   if (::parse_args (argc, argv) == -1)
     return -1;
 
-#if defined (ACE_HAS_IPV6)
+#if !defined (ACE_HAS_IPV6)
+  ACE_ERROR ((LM_ERROR,
+              ACE_TEXT ("IPv6 is not supported by ACE on this platform.\n")
+              ACE_TEXT ("Proactor_Test_IPV6 requires ACE IPv6 support.\n")));
+
+  ACE_END_TEST;
+
+  return 1;
+#else
+  if (!ACE::ipv6_enabled ())
+    {
+      ACE_ERROR ((LM_ERROR,
+                  ACE_TEXT ("IPv6 is not supported by ACE on this platform.\n")
+                  ACE_TEXT ("Proactor_Test_IPV6 requires ACE IPv6 support.\n")));
+
+      ACE_END_TEST;
+
+      return 1;
+    }
+
   disable_signal (ACE_SIGRTMIN, ACE_SIGRTMAX);
   disable_signal (SIGPIPE, SIGPIPE);
 
@@ -1902,7 +1921,7 @@ run_main (int argc, ACE_TCHAR *argv[])
   delete connector;
   delete acceptor;
 
-#endif /* ACE_HAS_IPV6 */
+#endif /* !ACE_HAS_IPV6 */
 
   ACE_END_TEST;
 
