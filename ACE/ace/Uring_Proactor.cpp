@@ -16,10 +16,19 @@
 #include "ace/OS_NS_errno.h"
 #include "ace/OS_NS_sys_time.h"
 
+#include <poll.h>
+#include <sys/eventfd.h>
+#include <unistd.h>
+
 ACE_BEGIN_VERSIONED_NAMESPACE_DECL
 
 namespace
 {
+  enum
+  {
+    ACE_URING_SUBMIT_WAKE_USER_DATA = 1
+  };
+
   unsigned
   queued_sqes (const io_uring &ring)
   {
@@ -37,6 +46,9 @@ namespace
 ACE_Uring_Proactor::ACE_Uring_Proactor (size_t entries)
   : ring_ ()
   , is_initialized_ (false)
+  , submit_signal_pending_ (false)
+  , submit_wakeup_handle_ (ACE_INVALID_HANDLE)
+  , dispatch_thread_id_ ()
 {
   ACE_TRACE ("ACE_Uring_Proactor::ACE_Uring_Proactor");
 
@@ -50,7 +62,37 @@ ACE_Uring_Proactor::ACE_Uring_Proactor (size_t entries)
     }
   else
     {
-      this->is_initialized_ = true;
+      this->submit_wakeup_handle_ =
+        ::eventfd (0, EFD_CLOEXEC | EFD_NONBLOCK);
+      if (this->submit_wakeup_handle_ == ACE_INVALID_HANDLE)
+        {
+          ACELIB_ERROR ((LM_ERROR,
+                         ACE_TEXT ("%p\n"),
+                         ACE_TEXT ("ACE_Uring_Proactor::eventfd")));
+          ::io_uring_queue_exit (&this->ring_);
+        }
+      else
+        {
+          ACE_GUARD (ACE_Thread_Mutex, sq_guard, this->sq_mutex_);
+          int const submit_result =
+            this->arm_submit_wakeup_locked () == -1
+              ? -1
+              : ::io_uring_submit (&this->ring_);
+          if (submit_result < 0)
+            {
+              errno = submit_result == -1 ? errno : -submit_result;
+              ACELIB_ERROR ((LM_ERROR,
+                             ACE_TEXT ("%p\n"),
+                             ACE_TEXT ("ACE_Uring_Proactor::arm_submit_wakeup_locked")));
+              ::close (this->submit_wakeup_handle_);
+              this->submit_wakeup_handle_ = ACE_INVALID_HANDLE;
+              ::io_uring_queue_exit (&this->ring_);
+            }
+          else
+            {
+              this->is_initialized_ = true;
+            }
+        }
     }
 }
 
@@ -71,6 +113,11 @@ ACE_Uring_Proactor::close (void)
 
   this->is_initialized_ = false;
   ::io_uring_queue_exit (&this->ring_);
+  if (this->submit_wakeup_handle_ != ACE_INVALID_HANDLE)
+    {
+      ::close (this->submit_wakeup_handle_);
+      this->submit_wakeup_handle_ = ACE_INVALID_HANDLE;
+    }
   return 0;
 }
 
@@ -131,6 +178,8 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
 
   if (!this->is_initialized_)
     return -1;
+
+  this->dispatch_thread_id_ = ACE_OS::thr_self ();
 
   if (max_to_process < 1)
     max_to_process = 1;
@@ -200,8 +249,11 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
             return -1;
           }
 
-        result =
-          static_cast<ACE_Uring_Asynch_Result *> (io_uring_cqe_get_data (cqe));
+        uintptr_t const data = ::io_uring_cqe_get_data64 (cqe);
+        if (data == ACE_URING_SUBMIT_WAKE_USER_DATA)
+          result = reinterpret_cast<ACE_Uring_Asynch_Result *> (ACE_URING_SUBMIT_WAKE_USER_DATA);
+        else
+          result = reinterpret_cast<ACE_Uring_Asynch_Result *> (data);
         error = (cqe->res < 0) ? -cqe->res : 0;
         bytes_transferred = (cqe->res > 0) ? cqe->res : 0;
         ::io_uring_cqe_seen (&this->ring_, cqe);
@@ -210,7 +262,20 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
       {
         ACE_GUARD_RETURN (ACE_Thread_Mutex, sq_guard, this->sq_mutex_, -1);
 
-        if (result != 0)
+        if (result == reinterpret_cast<ACE_Uring_Asynch_Result *> (ACE_URING_SUBMIT_WAKE_USER_DATA))
+          {
+            this->drain_submit_wakeup_locked ();
+            if (this->arm_submit_wakeup_locked () == -1)
+              return -1;
+
+            int const submit_result = this->submit_pending_sqe ();
+            if (submit_result < 0)
+              {
+                errno = -submit_result;
+                return -1;
+              }
+          }
+        else if (result != 0)
           {
             owner = result->owner ();
             if (owner != 0)
@@ -218,9 +283,13 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
           }
       }
 
+      if (result == reinterpret_cast<ACE_Uring_Asynch_Result *> (ACE_URING_SUBMIT_WAKE_USER_DATA))
+        continue;
+
       ++processed;
 
-      if (result == 0)
+      if (result == 0
+          )
         continue;
 
       result->complete (bytes_transferred,
@@ -287,6 +356,62 @@ ACE_Uring_Proactor::submit_pending_sqe (void)
     return 0;
 
   return ::io_uring_submit (&this->ring_);
+}
+
+int
+ACE_Uring_Proactor::signal_submitter (void)
+{
+  if (!this->is_initialized_ || this->submit_wakeup_handle_ == ACE_INVALID_HANDLE)
+    return -1;
+
+  if (this->on_dispatch_thread () || this->submit_signal_pending_)
+    return 0;
+
+  uint64_t const one = 1;
+  ssize_t const rc = ::write (this->submit_wakeup_handle_, &one, sizeof (one));
+  if (rc == static_cast<ssize_t> (sizeof (one)))
+    {
+      this->submit_signal_pending_ = true;
+      return 0;
+    }
+
+  return -1;
+}
+
+int
+ACE_Uring_Proactor::arm_submit_wakeup_locked (void)
+{
+  struct io_uring_sqe *sqe = ::io_uring_get_sqe (&this->ring_);
+  if (sqe == 0)
+    {
+      errno = EAGAIN;
+      return -1;
+    }
+
+  ::io_uring_prep_poll_add (sqe, this->submit_wakeup_handle_, POLLIN);
+  ::io_uring_sqe_set_data64 (sqe, ACE_URING_SUBMIT_WAKE_USER_DATA);
+  return 0;
+}
+
+void
+ACE_Uring_Proactor::drain_submit_wakeup_locked (void)
+{
+  if (this->submit_wakeup_handle_ == ACE_INVALID_HANDLE)
+    return;
+
+  uint64_t value = 0;
+  while (::read (this->submit_wakeup_handle_, &value, sizeof (value))
+         == static_cast<ssize_t> (sizeof (value)))
+    {
+    }
+
+  this->submit_signal_pending_ = false;
+}
+
+bool
+ACE_Uring_Proactor::on_dispatch_thread (void) const
+{
+  return ACE_OS::thr_equal (ACE_OS::thr_self (), this->dispatch_thread_id_) != 0;
 }
 
 ACE_Asynch_Read_Stream_Impl *ACE_Uring_Proactor::create_asynch_read_stream (void)
