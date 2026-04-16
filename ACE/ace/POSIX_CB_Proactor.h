@@ -45,7 +45,7 @@ class ACE_Export ACE_POSIX_CB_Proactor : public ACE_POSIX_AIOCB_Proactor
 
     void add_pending (void);
     void complete_one (void);
-    long pending (void) const;
+    size_t pending (void) const;
 
     void add_ref (void);
     void remove_ref (void);
@@ -55,8 +55,8 @@ class ACE_Export ACE_POSIX_CB_Proactor : public ACE_POSIX_AIOCB_Proactor
   private:
     ACE_Thread_Mutex mutex_;
     ACE_SYNCH_SEMAPHORE *sema_;
-    ACE_Atomic_Op<ACE_Thread_Mutex, long> pending_callbacks_;
-    ACE_Atomic_Op<ACE_Thread_Mutex, long> ref_count_;
+    ACE_Atomic_Op<ACE_Thread_Mutex, size_t> pending_callbacks_;
+    ACE_Atomic_Op<ACE_Thread_Mutex, size_t> ref_count_;
   };
 
 public:

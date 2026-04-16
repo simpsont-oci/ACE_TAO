@@ -208,7 +208,7 @@ jobs:
       run: |
         set -euxo pipefail
         sudo apt-get update
-        sudo apt-get install -y g++-13
+        sudo apt-get install -y "$CXX"
     - name: Configure ACE
       shell: bash
       run: |
@@ -296,13 +296,12 @@ jobs:
       run: |
         set -euxo pipefail
         sudo apt-get update
-        sudo apt-get install -y g++-13 liburing-dev
+        sudo apt-get install -y "$CXX" liburing-dev
     - name: Configure ACE for io_uring
       shell: bash
       run: |
         set -euxo pipefail
         cat > "$ACE_ROOT/ace/config.h" <<'EOF'
-        #define ACE_HAS_IO_URING 1
         #include "ace/config-linux.h"
         EOF
         cat > "$ACE_ROOT/include/makeinclude/platform_macros.GNU" <<'EOF'

@@ -93,6 +93,8 @@ static int loglevel;       // 0 full , 1 only errors
 
 static size_t xfer_limit;  // Number of bytes for Client to send.
 
+static unsigned long session_drain_timeout = 120; // Seconds.
+
 static char complete_message[] =
   "GET / HTTP/1.1\r\n"
   "Accept: */*\r\n"
@@ -426,6 +428,7 @@ class TestData
 public:
   TestData ();
   bool testing_done (void);
+  void log_session_counts (void);
   Server *server_up (void);
   Client *client_up (void);
   void server_done (Server *s);
@@ -475,6 +478,18 @@ TestData::testing_done (void)
     return false;
 
   return (svr_dn >= svr_up && clt_dn >= clt_up);
+}
+
+void
+TestData::log_session_counts (void)
+{
+  ACE_ERROR ((LM_ERROR,
+              ACE_TEXT ("Session progress: ")
+              ACE_TEXT ("servers up=%d down=%d, clients up=%d down=%d\n"),
+              this->servers_.sessions_up_.value (),
+              this->servers_.sessions_down_.value (),
+              this->clients_.sessions_up_.value (),
+              this->clients_.sessions_down_.value ()));
 }
 
 Server *
@@ -2051,6 +2066,7 @@ run_main (int argc, ACE_TCHAR *argv[])
   MyTask    task1;
   TestData  test;
   int started = 0;
+  int result = 0;
   Master *master = 0;
   Connector *connector = 0;
 
@@ -2089,8 +2105,23 @@ run_main (int argc, ACE_TCHAR *argv[])
       ACE_OS::sleep (3);
 
       ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("(%t) Sleeping til sessions run down.\n")));
+      ACE_Time_Value const drain_deadline =
+        ACE_OS::gettimeofday () + ACE_Time_Value (session_drain_timeout);
       while (!test.testing_done ())
-        ACE_OS::sleep (1);
+        {
+          if (ACE_OS::gettimeofday () >= drain_deadline)
+            {
+              ACE_ERROR ((LM_ERROR,
+                          ACE_TEXT ("(%t) Timed out waiting %u seconds ")
+                          ACE_TEXT ("for UDP sessions to drain.\n"),
+                          session_drain_timeout));
+              test.log_session_counts ();
+              result = -1;
+              break;
+            }
+
+          ACE_OS::sleep (1);
+        }
 
       test.stop_all ();
 
@@ -2100,6 +2131,8 @@ run_main (int argc, ACE_TCHAR *argv[])
           ACE_OS::sleep (1);
         }
     }
+  else
+    result = -1;
 
   if (started)
     {
@@ -2116,7 +2149,7 @@ run_main (int argc, ACE_TCHAR *argv[])
 
   ACE_END_TEST;
 
-  return 0;
+  return result;
 }
 
 #else

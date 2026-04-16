@@ -52,6 +52,7 @@ my $stress_timeout_secs = value_or_default($ENV{TIMEOUT_SECS_STRESS}, 120);
 my $base_port = value_or_default($ENV{BASE_PORT}, 26000);
 my $fail_fast = value_or_default($ENV{FAIL_FAST}, 0);
 my $include_ipv6 = value_or_default($ENV{INCLUDE_IPV6}, 'auto');
+my $include_experimental_udp = value_or_default($ENV{INCLUDE_EXPERIMENTAL_UDP}, 0);
 
 my @requested_scenarios;
 my @requested_backends;
@@ -93,6 +94,10 @@ Environment:
   TIMEOUT_SECS_STRESS=120   Per-scenario timeout for stress runs.
   FAIL_FAST=0|1             Stop after the first failed scenario.
   INCLUDE_IPV6=auto|0|1     Auto-detect loopback IPv6 support, force skip, or force run.
+  INCLUDE_EXPERIMENTAL_UDP=0|1
+                            Include UDP overload scenarios that may
+                            intentionally fail the benchmark's
+                            progress-timeout validation.
 EOF
 }
 
@@ -133,6 +138,13 @@ sub has_io_uring {
     open my $fh, '<', "$ace_root/ace/config.h" or return 0;
     while (<$fh>) {
       return 1 if /^\s*#\s*define\s+ACE_HAS_IO_URING/;
+    }
+    close $fh;
+  }
+  if (-e "$ace_root/include/makeinclude/platform_macros.GNU") {
+    open my $fh, '<', "$ace_root/include/makeinclude/platform_macros.GNU" or return 0;
+    while (<$fh>) {
+      return 1 if /^\s*uring\s*=\s*1(?:\s|$)/;
     }
     close $fh;
   }
@@ -575,33 +587,41 @@ add_scenario('tcp_16x16_heavy_mt_v4', 'network', '-4 -n 16 -m 2048 -b 8192 -w 16
   'TCP IPv4 heavier bulk-transfer workload with deeper write pipelining.');
 add_scenario('udp_1x1_light_v4', 'network', '-u -4 -n 1 -m 50000 -b 64 -w 1 -T 1',
   'UDP IPv4 one-to-one, single-thread, small datagrams latency proxy.');
-add_scenario('udp_1x16_moderate_st_v4', 'network', '-u -4 -n 16 -m 4096 -b 512 -w 4 -T 1',
-  'UDP IPv4 many sessions on one proactor thread.');
-add_scenario('udp_1x16_moderate_mt_v4', 'network', '-u -4 -n 16 -m 4096 -b 512 -w 4 -T 4',
-  'UDP IPv4 same moderate workload with four proactor threads.');
-add_scenario('udp_1x16_moderate_mt_buf1m_v4', 'network',
-  '-u -4 -n 16 -m 4096 -b 512 -w 4 -T 4 -R 1048576 -S 1048576',
-  'UDP IPv4 moderate multi-threaded workload with explicit 1 MiB socket buffers.');
 add_scenario('udp_1x16_moderate_mt_buf4m_v4', 'network',
   '-u -4 -n 16 -m 4096 -b 512 -w 4 -T 4 -R 4194304 -S 4194304',
   'UDP IPv4 moderate multi-threaded workload with explicit 4 MiB socket buffers.');
-add_scenario('udp_32x32_heavy_mt_v4', 'network', '-u -4 -n 32 -m 2048 -b 1400 -w 8 -T 8',
-  'UDP IPv4 heavier datagram throughput workload near MTU-sized payloads.');
-add_scenario('udp_32x32_heavy_mt_buf1m_v4', 'network',
-  '-u -4 -n 32 -m 2048 -b 1400 -w 8 -T 8 -R 1048576 -S 1048576',
-  'UDP IPv4 heavier datagram workload with explicit 1 MiB socket buffers.');
 add_scenario('udp_32x32_heavy_mt_buf4m_v4', 'network',
   '-u -4 -n 32 -m 2048 -b 1400 -w 8 -T 8 -R 4194304 -S 4194304',
   'UDP IPv4 heavier datagram workload with explicit 4 MiB socket buffers.');
 
+if ($include_experimental_udp) {
+  add_scenario('udp_1x16_moderate_st_v4', 'network', '-u -4 -n 16 -m 4096 -b 512 -w 4 -T 1',
+    'UDP IPv4 many sessions on one proactor thread.');
+  add_scenario('udp_1x16_moderate_mt_v4', 'network', '-u -4 -n 16 -m 4096 -b 512 -w 4 -T 4',
+    'UDP IPv4 same moderate workload with four proactor threads.');
+  add_scenario('udp_1x16_moderate_mt_buf1m_v4', 'network',
+    '-u -4 -n 16 -m 4096 -b 512 -w 4 -T 4 -R 1048576 -S 1048576',
+    'UDP IPv4 moderate multi-threaded workload with explicit 1 MiB socket buffers.');
+  add_scenario('udp_32x32_heavy_mt_v4', 'network', '-u -4 -n 32 -m 2048 -b 1400 -w 8 -T 8',
+    'UDP IPv4 heavier datagram throughput workload near MTU-sized payloads.');
+  add_scenario('udp_32x32_heavy_mt_buf1m_v4', 'network',
+    '-u -4 -n 32 -m 2048 -b 1400 -w 8 -T 8 -R 1048576 -S 1048576',
+    'UDP IPv4 heavier datagram workload with explicit 1 MiB socket buffers.');
+} else {
+  push @skipped_notes,
+    'Experimental UDP overload scenarios omitted by default; set INCLUDE_EXPERIMENTAL_UDP=1 to run rows that may stall/fail when socket buffers are too small.';
+}
+
 if ($ipv6_enabled) {
   add_scenario('tcp_ipv6_moderate_mt_v6', 'network', '-6 -n 8 -m 4096 -b 512 -w 4 -T 4',
     'TCP IPv6 moderate workload on loopback.');
-  add_scenario('udp_ipv6_moderate_mt_v6', 'network', '-u -6 -n 8 -m 4096 -b 512 -w 4 -T 4',
-    'UDP IPv6 moderate workload on loopback.');
   add_scenario('udp_ipv6_moderate_mt_buf4m_v6', 'network',
     '-u -6 -n 8 -m 4096 -b 512 -w 4 -T 4 -R 4194304 -S 4194304',
     'UDP IPv6 moderate workload on loopback with explicit 4 MiB socket buffers.');
+  if ($include_experimental_udp) {
+    add_scenario('udp_ipv6_moderate_mt_v6', 'network', '-u -6 -n 8 -m 4096 -b 512 -w 4 -T 4',
+      'UDP IPv6 moderate workload on loopback.');
+  }
 } else {
   push @skipped_notes,
     'IPv6 scenarios skipped because loopback ::1 was not detected or IPv6 was disabled.';

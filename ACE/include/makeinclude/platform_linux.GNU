@@ -70,6 +70,7 @@ ifeq ($(threads),1)
 endif
 
 ifeq ($(uring),1)
+  CPPFLAGS += -DACE_HAS_IO_URING
   LIBS += -luring
 endif
 
