@@ -49,6 +49,7 @@ if ($is_windows) {
 my $timeout_secs = value_or_default($ENV{TIMEOUT_SECS}, 180);
 my $base_port = value_or_default($ENV{BASE_PORT}, 20000);
 my $include_default = value_or_default($ENV{INCLUDE_DEFAULT}, 0);
+my $include_ipv6 = value_or_default($ENV{INCLUDE_IPV6}, 'auto');
 my $fail_fast = value_or_default($ENV{FAIL_FAST}, 0);
 my $run_network_udp = value_or_default($ENV{RUN_NETWORK_UDP}, 1);
 my $expected_fail_backends = value_or_default($ENV{EXPECTED_FAIL_BACKENDS}, '');
@@ -73,6 +74,7 @@ Environment:
   TIMEOUT_SECS=180        Per-test timeout.
   RUN_ID=<label>          Output directory label under log/proactor_matrix.
   INCLUDE_DEFAULT=0|1     Include the shared "default" backend selection.
+  INCLUDE_IPV6=auto|0|1   Auto-detect loopback IPv6 support, force skip, or force run.
   RUN_NETWORK_UDP=0|1     Include the UDP correctness variant of
                           Proactor_Network_Performance_Test.
   FAIL_FAST=0|1           Stop on the first failing matrix entry.
@@ -124,6 +126,42 @@ sub has_io_uring {
   return 0;
 }
 
+sub ace_config_has_define {
+  my ($name) = @_;
+  my $path = "$ace_root/ace/config.h";
+  return 0 if !-e $path;
+
+  open my $fh, '<', $path or return 0;
+  while (my $line = <$fh>) {
+    if ($line =~ /^\s*#\s*define\s+\Q$name\E(?:\s+|$)/) {
+      close $fh;
+      return 1;
+    }
+  }
+  close $fh;
+  return 0;
+}
+
+sub ipv6_loopback_available {
+  if ($is_windows) {
+    my $status = system('ping', '-n', '1', '::1');
+    return $status == 0 ? 1 : 0;
+  }
+
+  my $path = '/proc/net/if_inet6';
+  return 0 if !-r $path;
+
+  open my $fh, '<', $path or return 0;
+  while (my $line = <$fh>) {
+    if ($line =~ /^00000000000000000000000000000001\s+\S+\s+\S+\s+\S+\s+\S+\s+lo\b/) {
+      close $fh;
+      return 1;
+    }
+  }
+  close $fh;
+  return 0;
+}
+
 sub candidate_backends {
   my @backends = $is_windows ? qw(win32) : qw(aiocb sig cb);
   push @backends, 'uring' if has_io_uring();
@@ -150,6 +188,11 @@ sub test_needs_port {
        || $test_name eq 'Proactor_Test_IPV6'
        || $test_name eq 'Proactor_UDP_Test'
        || $test_name eq 'Proactor_Scatter_Gather_Test') ? 1 : 0;
+}
+
+sub case_requires_ipv6 {
+  my ($case) = @_;
+  return $case->{test_name} eq 'Proactor_Test_IPV6' ? 1 : 0;
 }
 
 sub interpret_wait_status {
@@ -346,6 +389,33 @@ if (!$is_windows) {
   );
 }
 
+my $ace_ipv6_enabled = ace_config_has_define('ACE_HAS_IPV6') ? 1 : 0;
+my $ipv6_loopback = ipv6_loopback_available() ? 1 : 0;
+my $ipv6_enabled = 0;
+if ($include_ipv6 eq 'auto') {
+  $ipv6_enabled = ($ace_ipv6_enabled && $ipv6_loopback) ? 1 : 0;
+} elsif ($include_ipv6 eq '0') {
+  $ipv6_enabled = 0;
+} elsif ($include_ipv6 eq '1') {
+  $ipv6_enabled = 1;
+} else {
+  print STDERR "error: INCLUDE_IPV6 must be auto, 0, or 1\n";
+  exit 2;
+}
+
+my $ipv6_skip_reason = '';
+if (!$ipv6_enabled) {
+  if ($include_ipv6 eq '0') {
+    $ipv6_skip_reason = 'IPv6 disabled by INCLUDE_IPV6=0';
+  } elsif (!$ace_ipv6_enabled) {
+    $ipv6_skip_reason = 'ACE IPv6 support is disabled in ace/config.h';
+  } elsif (!$ipv6_loopback) {
+    $ipv6_skip_reason = 'IPv6 loopback ::1 is unavailable';
+  } else {
+    $ipv6_skip_reason = 'IPv6 is unavailable';
+  }
+}
+
 make_path($log_dir, $run_dir);
 
 if ($list_only) {
@@ -355,8 +425,13 @@ if ($list_only) {
     my $case_label = $case->{test_name};
     $case_label .= ':' . $case->{variant} if $case->{variant} ne '';
     my $args = $case->{args} ne '' ? $case->{args} : '<none>';
-    print "case $case_label args=$args\n";
+    print "case $case_label args=$args";
+    if (case_requires_ipv6($case) && !$ipv6_enabled) {
+      print " [skipped: $ipv6_skip_reason]";
+    }
+    print "\n";
     for my $backend (@backends) {
+      next if case_requires_ipv6($case) && !$ipv6_enabled;
       print "  backend $backend\n";
     }
   }
@@ -432,6 +507,14 @@ sub run_case {
 for my $case (@cases) {
   my $case_label = $case->{test_name};
   $case_label .= ':' . $case->{variant} if $case->{variant} ne '';
+
+  if (case_requires_ipv6($case) && !$ipv6_enabled) {
+    for my $backend (@backends) {
+      ++$skip_count;
+      print "[SKIP] $case_label backend=$backend ($ipv6_skip_reason)\n";
+    }
+    next;
+  }
 
   for my $backend (@backends) {
     if (!run_case($case, $backend) && $fail_fast) {
