@@ -31,8 +31,7 @@ ACE_Asynch_Read_Stream_Impl::readv (ACE_Message_Block &/*message_block*/,
                                     int /*priority*/,
                                     int /*signal_number*/)
 {
-  errno = ENOTSUP;
-  return -1;
+  ACE_NOTSUP_RETURN (-1);
 }
 
 ACE_Asynch_Read_Stream_Result_Impl::~ACE_Asynch_Read_Stream_Result_Impl (void)
@@ -50,8 +49,7 @@ ACE_Asynch_Write_Stream_Impl::writev (ACE_Message_Block &/*message_block*/,
                                       int /*priority*/,
                                       int /*signal_number*/)
 {
-  errno = ENOTSUP;
-  return -1;
+  ACE_NOTSUP_RETURN (-1);
 }
 
 ACE_Asynch_Write_Stream_Result_Impl::~ACE_Asynch_Write_Stream_Result_Impl (void)
@@ -71,8 +69,7 @@ ACE_Asynch_Read_File_Impl::readv (ACE_Message_Block &/*message_block*/,
                                   int /*priority*/,
                                   int /*signal_number*/)
 {
-  errno = ENOTSUP;
-  return -1;
+  ACE_NOTSUP_RETURN (-1);
 }
 
 int
@@ -104,8 +101,7 @@ ACE_Asynch_Write_File_Impl::writev (ACE_Message_Block &/*message_block*/,
                                     int /*priority*/,
                                     int /*signal_number*/)
 {
-  errno = ENOTSUP;
-  return -1;
+  ACE_NOTSUP_RETURN (-1);
 }
 
 int

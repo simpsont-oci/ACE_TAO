@@ -287,8 +287,6 @@ namespace
           if (now >= progress_deadline)
             {
               this->end_time_ = now;
-              if (this->config_.transport == TRANSPORT_UDP)
-                break;
               this->failed_ = true;
               this->stalled_ = true;
               break;

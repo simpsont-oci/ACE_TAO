@@ -36,7 +36,7 @@ ACE_POSIX_CB_Proactor::Notification_State::complete_one (void)
   this->remove_ref ();
 }
 
-long
+size_t
 ACE_POSIX_CB_Proactor::Notification_State::pending (void) const
 {
   return this->pending_callbacks_.value ();
@@ -155,7 +155,10 @@ ACE_POSIX_CB_Proactor::post_completion (ACE_POSIX_Asynch_Result *result)
 {
   ACE_MT (ACE_GUARD_RETURN (ACE_SYNCH_MUTEX, ace_mon, this->mutex_, -1));
 
-  return this->putq_result (result);
+  int const rc = this->putq_result (result);
+  if (rc == 0)
+    this->sema_.release ();
+  return rc;
 }
 
 

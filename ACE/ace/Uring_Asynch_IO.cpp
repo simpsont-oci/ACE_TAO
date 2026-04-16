@@ -646,7 +646,8 @@ ACE_Uring_Asynch_Read_File::read (ACE_Message_Block &message_block,
                                                      offset_high),
                   -1);
 
-  uint64_t full_offset = ((uint64_t)offset_high << 32) | offset;
+  ACE_UINT64 full_offset =
+    (static_cast<ACE_UINT64> (offset_high) << 32) | offset;
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
   struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
@@ -744,7 +745,8 @@ ACE_Uring_Asynch_Read_File::readv (ACE_Message_Block &message_block,
       return -1;
     }
 
-  uint64_t full_offset = ((uint64_t)offset_high << 32) | offset;
+  ACE_UINT64 full_offset =
+    (static_cast<ACE_UINT64> (offset_high) << 32) | offset;
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
   struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
@@ -1033,7 +1035,8 @@ ACE_Uring_Asynch_Write_File::write (ACE_Message_Block &message_block,
                                                       offset_high),
                   -1);
 
-  uint64_t full_offset = ((uint64_t)offset_high << 32) | offset;
+  ACE_UINT64 full_offset =
+    (static_cast<ACE_UINT64> (offset_high) << 32) | offset;
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
   struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
@@ -1131,7 +1134,8 @@ ACE_Uring_Asynch_Write_File::writev (ACE_Message_Block &message_block,
       return -1;
     }
 
-  uint64_t full_offset = ((uint64_t)offset_high << 32) | offset;
+  ACE_UINT64 full_offset =
+    (static_cast<ACE_UINT64> (offset_high) << 32) | offset;
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
   struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();

@@ -123,6 +123,13 @@ sub has_io_uring {
     }
     close $fh;
   }
+  if (-e "$ace_root/include/makeinclude/platform_macros.GNU") {
+    open my $fh, '<', "$ace_root/include/makeinclude/platform_macros.GNU" or return 0;
+    while (<$fh>) {
+      return 1 if /^\s*uring\s*=\s*1(?:\s|$)/;
+    }
+    close $fh;
+  }
   return 0;
 }
 
