@@ -22,6 +22,7 @@
 
 #if defined (ACE_HAS_AIO_CALLS) && defined (ACE_HAS_IO_URING)
 
+#include "ace/OS_NS_Thread.h"
 #include "ace/Proactor_Impl.h"
 #include "ace/Thread_Mutex.h"
 
@@ -193,6 +194,7 @@ public:
   int submit_sqe (void);
   int submit_sqe_if_necessary (void);
   int submit_pending_sqe (void);
+  int signal_submitter (void);
 
 protected:
   int process_cqes (int max_to_process,
@@ -205,8 +207,15 @@ private:
     DEFAULT_SUBMIT_BATCH_SIZE = 8
   };
 
+  int arm_submit_wakeup_locked (void);
+  void drain_submit_wakeup_locked (void);
+  bool on_dispatch_thread (void) const;
+
   struct io_uring ring_;
   bool is_initialized_;
+  bool submit_signal_pending_;
+  ACE_HANDLE submit_wakeup_handle_;
+  ACE_thread_t dispatch_thread_id_;
   mutable ACE_Thread_Mutex dispatch_mutex_;
   mutable ACE_Thread_Mutex sq_mutex_;
   mutable ACE_Thread_Mutex cq_mutex_;

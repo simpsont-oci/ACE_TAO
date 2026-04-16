@@ -395,10 +395,8 @@ ACE_Uring_Asynch_Operation::queue_result (ACE_Uring_Asynch_Result *result)
 {
   this->register_result (result);
 
-  int submit_result = this->uring_proactor_->submit_sqe_if_necessary ();
-  if (submit_result < 0)
+  if (this->uring_proactor_->signal_submitter () == -1)
     {
-      errno = -submit_result;
       this->unregister_result (result);
       delete result;
       return -1;
@@ -412,10 +410,8 @@ ACE_Uring_Asynch_Operation::submit_result (ACE_Uring_Asynch_Result *result)
 {
   this->register_result (result);
 
-  int submit_result = this->uring_proactor_->submit_sqe ();
-  if (submit_result < 0)
+  if (this->uring_proactor_->signal_submitter () == -1)
     {
-      errno = -submit_result;
       this->unregister_result (result);
       delete result;
       return -1;
