@@ -19,7 +19,7 @@
 
 #if defined (ACE_HAS_AIO_CALLS)
 
-#include "ace/Atomic_Op.h"
+#include "ace/Condition_Thread_Mutex.h"
 #include "ace/Synch_Traits.h"
 #include "ace/Thread_Semaphore.h"
 #include "ace/Thread_Mutex.h"
@@ -45,7 +45,9 @@ class ACE_Export ACE_POSIX_CB_Proactor : public ACE_POSIX_AIOCB_Proactor
 
     void add_pending (void);
     void complete_one (void);
-    size_t pending (void) const;
+    void abandon_pending (void);
+    size_t pending (void);
+    int wait_for_pending_zero (const ACE_Time_Value *abstime);
 
     void add_ref (void);
     void remove_ref (void);
@@ -53,10 +55,13 @@ class ACE_Export ACE_POSIX_CB_Proactor : public ACE_POSIX_AIOCB_Proactor
     void detach (void);
 
   private:
+    void finish_pending_i (bool signal_waiter);
+
     ACE_Thread_Mutex mutex_;
+    ACE_Condition_Thread_Mutex zero_pending_;
     ACE_SYNCH_SEMAPHORE *sema_;
-    ACE_Atomic_Op<ACE_Thread_Mutex, size_t> pending_callbacks_;
-    ACE_Atomic_Op<ACE_Thread_Mutex, size_t> ref_count_;
+    size_t pending_callbacks_;
+    size_t ref_count_;
   };
 
 public:
@@ -108,6 +113,8 @@ protected:
 
   /// Post a result without instantiating the AIOCB notify pipe.
   virtual int post_completion (ACE_POSIX_Asynch_Result *result);
+
+  virtual void abandon_pending_aio (void);
 
   /**
    * Dispatch a single set of events.  If @a milli_seconds elapses

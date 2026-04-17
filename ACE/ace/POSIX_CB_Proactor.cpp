@@ -10,7 +10,8 @@
 ACE_BEGIN_VERSIONED_NAMESPACE_DECL
 
 ACE_POSIX_CB_Proactor::Notification_State::Notification_State (ACE_SYNCH_SEMAPHORE &sema)
-  : sema_ (&sema),
+  : zero_pending_ (this->mutex_),
+    sema_ (&sema),
     pending_callbacks_ (0),
     ref_count_ (0)
 {
@@ -19,39 +20,60 @@ ACE_POSIX_CB_Proactor::Notification_State::Notification_State (ACE_SYNCH_SEMAPHO
 void
 ACE_POSIX_CB_Proactor::Notification_State::add_pending (void)
 {
-  this->add_ref ();
+  ACE_GUARD (ACE_Thread_Mutex, ace_mon, this->mutex_);
+  ++this->ref_count_;
   ++this->pending_callbacks_;
 }
 
 void
 ACE_POSIX_CB_Proactor::Notification_State::complete_one (void)
 {
-  {
-    ACE_GUARD (ACE_Thread_Mutex, ace_mon, this->mutex_);
-    if (this->sema_ != 0)
-      this->sema_->release ();
-  }
+  this->finish_pending_i (true);
+}
 
-  --this->pending_callbacks_;
-  this->remove_ref ();
+void
+ACE_POSIX_CB_Proactor::Notification_State::abandon_pending (void)
+{
+  this->finish_pending_i (false);
 }
 
 size_t
-ACE_POSIX_CB_Proactor::Notification_State::pending (void) const
+ACE_POSIX_CB_Proactor::Notification_State::pending (void)
 {
-  return this->pending_callbacks_.value ();
+  ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->mutex_, 0);
+  return this->pending_callbacks_;
+}
+
+int
+ACE_POSIX_CB_Proactor::Notification_State::wait_for_pending_zero (const ACE_Time_Value *abstime)
+{
+  ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->mutex_, -1);
+
+  while (this->pending_callbacks_ != 0)
+    if (this->zero_pending_.wait (abstime) == -1)
+      return -1;
+
+  return 0;
 }
 
 void
 ACE_POSIX_CB_Proactor::Notification_State::add_ref (void)
 {
+  ACE_GUARD (ACE_Thread_Mutex, ace_mon, this->mutex_);
   ++this->ref_count_;
 }
 
 void
 ACE_POSIX_CB_Proactor::Notification_State::remove_ref (void)
 {
-  if (--this->ref_count_ == 0)
+  bool destroy = false;
+  {
+    ACE_GUARD (ACE_Thread_Mutex, ace_mon, this->mutex_);
+    if (this->ref_count_ != 0 && --this->ref_count_ == 0)
+      destroy = true;
+  }
+
+  if (destroy)
     delete this;
 }
 
@@ -60,6 +82,31 @@ ACE_POSIX_CB_Proactor::Notification_State::detach (void)
 {
   ACE_GUARD (ACE_Thread_Mutex, ace_mon, this->mutex_);
   this->sema_ = 0;
+}
+
+void
+ACE_POSIX_CB_Proactor::Notification_State::finish_pending_i (bool signal_waiter)
+{
+  bool destroy = false;
+  {
+    ACE_GUARD (ACE_Thread_Mutex, ace_mon, this->mutex_);
+
+    if (signal_waiter && this->sema_ != 0)
+      this->sema_->release ();
+
+    if (this->pending_callbacks_ != 0)
+      {
+        --this->pending_callbacks_;
+        if (this->pending_callbacks_ == 0)
+          this->zero_pending_.broadcast ();
+      }
+
+    if (this->ref_count_ != 0 && --this->ref_count_ == 0)
+      destroy = true;
+  }
+
+  if (destroy)
+    delete this;
 }
 
 ACE_POSIX_CB_Proactor::ACE_POSIX_CB_Proactor (size_t max_aio_operations)
@@ -115,14 +162,10 @@ ACE_POSIX_CB_Proactor::close (void)
     {
       this->notification_state_ = 0;
 
-      ACE_Time_Value const settle_interval (0, 10000);
-      size_t const max_settle_attempts = 50;
-
-      for (size_t attempt = 0;
-           state->pending () > 0 && attempt < max_settle_attempts;
-           ++attempt)
-        ACE_OS::sleep (settle_interval);
-
+      ACE_Time_Value const settle_timeout (0, 500000);
+      ACE_Time_Value const deadline =
+        ACE_OS::gettimeofday () + settle_timeout;
+      (void) state->wait_for_pending_zero (&deadline);
       state->detach ();
       state->remove_ref ();
     }
@@ -159,6 +202,13 @@ ACE_POSIX_CB_Proactor::post_completion (ACE_POSIX_Asynch_Result *result)
   if (rc == 0)
     this->sema_.release ();
   return rc;
+}
+
+void
+ACE_POSIX_CB_Proactor::abandon_pending_aio (void)
+{
+  if (this->notification_state_ != 0)
+    this->notification_state_->abandon_pending ();
 }
 
 
@@ -314,8 +364,7 @@ ACE_POSIX_CB_Proactor::start_aio (ACE_POSIX_Asynch_Result *result,
       return 0;
 
     default:
-      if (this->notification_state_ != 0)
-        this->notification_state_->complete_one ();
+      this->abandon_pending_aio ();
       break;
     }
 

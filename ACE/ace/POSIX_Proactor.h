@@ -444,6 +444,10 @@ protected:
   /// called from post_completion method
   virtual int notify_completion (int sig_num);
 
+  /// Called when an AIO request that was expected to signal completion
+  /// will never invoke its normal completion callback.
+  virtual void abandon_pending_aio (void);
+
   /// Put "post_completed" result into the internal queue
   int  putq_result (ACE_POSIX_Asynch_Result *result);
 
