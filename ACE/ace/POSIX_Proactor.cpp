@@ -878,6 +878,7 @@ int ACE_POSIX_AIOCB_Proactor::delete_result_aiocb_list (void)
       if (this->result_list_[ai] == 0 || this->aiocb_list_[ai] != 0)
         continue;
 
+      this->abandon_pending_aio ();
       delete this->result_list_[ai];
       this->result_list_[ai] = 0;
     }
@@ -1085,6 +1086,11 @@ ACE_POSIX_AIOCB_Proactor::notify_completion(int  sig_num)
     return 0;
 
   return this->aiocb_notify_pipe_manager_->notify ();
+}
+
+void
+ACE_POSIX_AIOCB_Proactor::abandon_pending_aio (void)
+{
 }
 
 int
@@ -1594,6 +1600,7 @@ ACE_POSIX_AIOCB_Proactor::start_deferred_aio ()
 
   result->set_error (errno);
   result->set_bytes_transferred (0);
+  this->abandon_pending_aio ();
   this->putq_result (result);  // we are with locked mutex_ here !
 
   return -1;
@@ -1653,6 +1660,7 @@ ACE_POSIX_AIOCB_Proactor::cancel_aio (ACE_HANDLE handle)
 
             asynch_result->set_error (ECANCELED);
             asynch_result->set_bytes_transferred (0);
+            this->abandon_pending_aio ();
             this->putq_result (asynch_result);
             // we are with locked mutex_ here !
           }
