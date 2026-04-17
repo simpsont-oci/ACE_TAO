@@ -158,7 +158,7 @@ jobs:
           --scenario stress_recursive `
           --scenario tcp_1x1_light_v4 `
           --scenario tcp_1x16_moderate_mt_v4 `
-          --scenario udp_1x16_moderate_mt_v4
+          --scenario udp_1x16_moderate_mt_buf4m_v4
     - name: Upload Proactor Win32 smoke logs
       if: always() && matrix.name == 'VS2022Debug64Cxx17'
       uses: actions/upload-artifact@v4
