@@ -46,12 +46,12 @@ namespace
          mb != 0 && prepared_bytes < requested_bytes && iovec_count < ACE_IOV_MAX;
          mb = mb->cont ())
       {
-        size_t available = write_operation ? mb->length () : mb->space ();
+        size_t const available = write_operation ? mb->length () : mb->space ();
         if (available == 0)
           continue;
 
-        size_t remaining = requested_bytes - prepared_bytes;
-        size_t len = available > remaining ? remaining : available;
+        size_t const remaining = requested_bytes - prepared_bytes;
+        size_t const len = available > remaining ? remaining : available;
         if (len == 0)
           break;
 
@@ -73,12 +73,12 @@ namespace
          mb != 0 && prepared_bytes < requested_bytes && index < iovec_count;
          mb = mb->cont ())
       {
-        size_t available = write_operation ? mb->length () : mb->space ();
+        size_t const available = write_operation ? mb->length () : mb->space ();
         if (available == 0)
           continue;
 
-        size_t remaining = requested_bytes - prepared_bytes;
-        size_t len = available > remaining ? remaining : available;
+        size_t const remaining = requested_bytes - prepared_bytes;
+        size_t const len = available > remaining ? remaining : available;
         iovec_array[index].iov_base = write_operation
           ? static_cast<void *> (mb->rd_ptr ())
           : static_cast<void *> (mb->wr_ptr ());
@@ -148,7 +148,7 @@ ACE_Uring_Asynch_Result::ACE_Uring_Asynch_Result
     error_ (0),
     owner_ (0)
 {
-  ACE_Handler::Proxy *proxy = this->handler_proxy_.get ();
+  ACE_Handler::Proxy *const proxy = this->handler_proxy_.get ();
   this->handler_ = proxy != 0 ? proxy->handler () : 0;
 }
 
@@ -159,7 +159,7 @@ ACE_Uring_Asynch_Result::~ACE_Uring_Asynch_Result (void)
 ACE_Handler *
 ACE_Uring_Asynch_Result::handler (void) const
 {
-  ACE_Handler::Proxy *proxy = this->handler_proxy_.get ();
+  ACE_Handler::Proxy *const proxy = this->handler_proxy_.get ();
   return proxy != 0 ? proxy->handler () : 0;
 }
 
@@ -256,7 +256,7 @@ ACE_Uring_Asynch_Result::owner (void) const
 int
 ACE_Uring_Asynch_Result::post_completion (ACE_Proactor_Impl *proactor_impl)
 {
-  ACE_Uring_Proactor *up = dynamic_cast<ACE_Uring_Proactor *> (proactor_impl);
+  ACE_Uring_Proactor *const up = dynamic_cast<ACE_Uring_Proactor *> (proactor_impl);
   if (up == 0)
     return -1;
 
@@ -264,7 +264,7 @@ ACE_Uring_Asynch_Result::post_completion (ACE_Proactor_Impl *proactor_impl)
     return -1;
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, up->sq_mutex (), -1);
-  struct io_uring_sqe *sqe = up->get_sqe ();
+  struct io_uring_sqe *const sqe = up->get_sqe ();
   if (!sqe)
     return -1;
   ::io_uring_prep_nop (sqe);
@@ -289,7 +289,7 @@ ACE_Uring_Asynch_Timer::ACE_Uring_Asynch_Timer
 void
 ACE_Uring_Asynch_Timer::complete (size_t, int, const void *, u_long)
 {
-  ACE_Handler *handler = this->handler ();
+  ACE_Handler *const handler = this->handler ();
   if (handler != 0)
     handler->handle_time_out (this->time_, this->act_);
   delete this;
@@ -326,7 +326,7 @@ ACE_Uring_Asynch_Operation::open (const ACE_Handler::Proxy_Ptr &handler_proxy,
   // (matches POSIX behavior).
   if (this->handle_ == ACE_INVALID_HANDLE)
     {
-      ACE_Handler *h = handler_proxy.get ()->handler ();
+      ACE_Handler *const h = handler_proxy.get ()->handler ();
       if (h != 0)
         this->handle_ = h->handle ();
     }
@@ -355,7 +355,7 @@ ACE_Uring_Asynch_Operation::cancel (void)
        i != the_end;
        ++i)
     {
-      struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+      struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
       if (!sqe)
         {
           errno = EAGAIN;
@@ -366,7 +366,7 @@ ACE_Uring_Asynch_Operation::cancel (void)
       ::io_uring_sqe_set_data (sqe, 0);
     }
 
-  int submit_result = this->uring_proactor_->submit_pending_sqe ();
+  int const submit_result = this->uring_proactor_->submit_pending_sqe ();
   if (submit_result < 0)
     {
       errno = -submit_result;
@@ -386,7 +386,7 @@ ACE_Handler *
 ACE_Uring_Asynch_Operation::handler (void)
 {
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->pending_results_lock_, 0);
-  ACE_Handler::Proxy *proxy = this->handler_proxy_.get ();
+  ACE_Handler::Proxy *const proxy = this->handler_proxy_.get ();
   return proxy != 0 ? proxy->handler () : 0;
 }
 
@@ -509,7 +509,7 @@ ACE_Uring_Asynch_Read_Stream_Result::complete (size_t bytes_transferred,
         this->message_block_->wr_ptr (bytes_transferred);
     }
 
-  ACE_Handler *handler = this->handler ();
+  ACE_Handler *const handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Read_Stream::Result result (this);
@@ -531,7 +531,7 @@ ACE_Uring_Asynch_Read_Stream::read (ACE_Message_Block &message_block,
                                     int,
                                     int)
 {
-  size_t space = message_block.space ();
+  size_t const space = message_block.space ();
   if (num_bytes_to_read > space) num_bytes_to_read = space;
 
   ACE_Uring_Asynch_Read_Stream_Result *result = 0;
@@ -545,7 +545,7 @@ ACE_Uring_Asynch_Read_Stream::read (ACE_Message_Block &message_block,
                   -1);
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
-  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
   if (!sqe)
     {
       delete result;
@@ -599,7 +599,7 @@ ACE_Uring_Asynch_Read_Stream::readv (ACE_Message_Block &message_block,
     }
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
-  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
   if (!sqe)
     {
       delete result;
@@ -631,7 +631,7 @@ ACE_Uring_Asynch_Read_File::read (ACE_Message_Block &message_block,
                                   int,
                                   int)
 {
-  size_t space = message_block.space ();
+  size_t const space = message_block.space ();
   if (num_bytes_to_read > space) num_bytes_to_read = space;
 
   ACE_Uring_Asynch_Read_File_Result *result = 0;
@@ -646,11 +646,11 @@ ACE_Uring_Asynch_Read_File::read (ACE_Message_Block &message_block,
                                                      offset_high),
                   -1);
 
-  ACE_UINT64 full_offset =
+  ACE_UINT64 const full_offset =
     (static_cast<ACE_UINT64> (offset_high) << 32) | offset;
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
-  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
   if (!sqe)
     {
       delete result;
@@ -674,7 +674,7 @@ ACE_Uring_Asynch_Read_File::read (ACE_Message_Block &message_block,
                                   int,
                                   int)
 {
-  size_t space = message_block.space ();
+  size_t const space = message_block.space ();
   if (num_bytes_to_read > space) num_bytes_to_read = space;
 
   ACE_Uring_Asynch_Read_File_Result *result = 0;
@@ -690,7 +690,7 @@ ACE_Uring_Asynch_Read_File::read (ACE_Message_Block &message_block,
                   -1);
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
-  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
   if (!sqe)
     {
       delete result;
@@ -745,11 +745,11 @@ ACE_Uring_Asynch_Read_File::readv (ACE_Message_Block &message_block,
       return -1;
     }
 
-  ACE_UINT64 full_offset =
+  ACE_UINT64 const full_offset =
     (static_cast<ACE_UINT64> (offset_high) << 32) | offset;
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
-  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
   if (!sqe)
     {
       delete result;
@@ -822,7 +822,7 @@ ACE_Uring_Asynch_Read_File_Result::complete (size_t bytes_transferred,
         this->message_block_->wr_ptr (bytes_transferred);
     }
 
-  ACE_Handler *handler = this->handler ();
+  ACE_Handler *const handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Read_File::Result result (this);
@@ -898,7 +898,7 @@ ACE_Uring_Asynch_Write_Stream_Result::complete (size_t bytes_transferred,
         this->message_block_->rd_ptr (bytes_transferred);
     }
 
-  ACE_Handler *handler = this->handler ();
+  ACE_Handler *const handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Write_Stream::Result result (this);
@@ -920,7 +920,7 @@ ACE_Uring_Asynch_Write_Stream::write (ACE_Message_Block &message_block,
                                       int,
                                       int)
 {
-  size_t length = message_block.length ();
+  size_t const length = message_block.length ();
   if (bytes_to_write > length) bytes_to_write = length;
 
   ACE_Uring_Asynch_Write_Stream_Result *result = 0;
@@ -934,7 +934,7 @@ ACE_Uring_Asynch_Write_Stream::write (ACE_Message_Block &message_block,
                   -1);
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
-  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
   if (!sqe)
     {
       delete result;
@@ -988,7 +988,7 @@ ACE_Uring_Asynch_Write_Stream::writev (ACE_Message_Block &message_block,
     }
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
-  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
   if (!sqe)
     {
       delete result;
@@ -1020,7 +1020,7 @@ ACE_Uring_Asynch_Write_File::write (ACE_Message_Block &message_block,
                                     int,
                                     int)
 {
-  size_t length = message_block.length ();
+  size_t const length = message_block.length ();
   if (bytes_to_write > length) bytes_to_write = length;
 
   ACE_Uring_Asynch_Write_File_Result *result = 0;
@@ -1035,11 +1035,11 @@ ACE_Uring_Asynch_Write_File::write (ACE_Message_Block &message_block,
                                                       offset_high),
                   -1);
 
-  ACE_UINT64 full_offset =
+  ACE_UINT64 const full_offset =
     (static_cast<ACE_UINT64> (offset_high) << 32) | offset;
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
-  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
   if (!sqe)
     {
       delete result;
@@ -1063,7 +1063,7 @@ ACE_Uring_Asynch_Write_File::write (ACE_Message_Block &message_block,
                                     int,
                                     int)
 {
-  size_t length = message_block.length ();
+  size_t const length = message_block.length ();
   if (bytes_to_write > length) bytes_to_write = length;
 
   ACE_Uring_Asynch_Write_File_Result *result = 0;
@@ -1079,7 +1079,7 @@ ACE_Uring_Asynch_Write_File::write (ACE_Message_Block &message_block,
                   -1);
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
-  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
   if (!sqe)
     {
       delete result;
@@ -1134,11 +1134,11 @@ ACE_Uring_Asynch_Write_File::writev (ACE_Message_Block &message_block,
       return -1;
     }
 
-  ACE_UINT64 full_offset =
+  ACE_UINT64 const full_offset =
     (static_cast<ACE_UINT64> (offset_high) << 32) | offset;
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
-  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
   if (!sqe)
     {
       delete result;
@@ -1211,7 +1211,7 @@ ACE_Uring_Asynch_Write_File_Result::complete (size_t bytes_transferred,
         this->message_block_->rd_ptr (bytes_transferred);
     }
 
-  ACE_Handler *handler = this->handler ();
+  ACE_Handler *const handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Write_File::Result result (this);
@@ -1295,7 +1295,7 @@ ACE_Uring_Asynch_Accept_Result::complete (size_t bytes_transferred,
   if (success)
     this->accept_handle_ = (ACE_HANDLE) bytes_transferred;
 
-  ACE_Handler *handler = this->handler ();
+  ACE_Handler *const handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Accept::Result result (this);
@@ -1331,7 +1331,7 @@ ACE_Uring_Asynch_Accept::accept (ACE_Message_Block &message_block,
                   -1);
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
-  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
   if (!sqe)
     {
       delete result;
@@ -1371,7 +1371,7 @@ ACE_Uring_Asynch_Connect_Result::complete (size_t bytes_transferred,
 {
   this->bytes_transferred_ = bytes_transferred;
   this->error_ = error;
-  ACE_Handler *handler = this->handler ();
+  ACE_Handler *const handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Connect::Result result (this);
@@ -1433,7 +1433,7 @@ ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle,
 
   if (handle == ACE_INVALID_HANDLE)
     {
-      int protocol_family = remote_sap.get_type ();
+      int const protocol_family = remote_sap.get_type ();
 
       handle = ACE_OS::socket (protocol_family,
                                SOCK_STREAM,
@@ -1452,7 +1452,7 @@ ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle,
       else
         {
           // Reuse the address.
-          int one = 1;
+          int const one = 1;
           if (protocol_family != PF_UNIX &&
               reuse_addr != 0 &&
               ACE_OS::setsockopt (handle,
@@ -1471,8 +1471,8 @@ ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle,
 
   if (result->error () == 0 && local_sap != ACE_Addr::sap_any)
     {
-      sockaddr * laddr = reinterpret_cast<sockaddr *> (local_sap.get_addr ());
-      size_t size = local_sap.get_size ();
+      sockaddr *const laddr = reinterpret_cast<sockaddr *> (local_sap.get_addr ());
+      size_t const size = local_sap.get_size ();
 
       if (ACE_OS::bind (handle, laddr, size) == -1)
         {
@@ -1495,7 +1495,7 @@ ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle,
   if (result->error () == 0)
     {
       ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
-      struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+      struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
       if (!sqe)
         {
           result->set_error (EAGAIN);
@@ -1509,7 +1509,7 @@ ACE_Uring_Asynch_Connect::connect (ACE_HANDLE connect_handle,
                                    remote_sap.get_size ());
           ::io_uring_sqe_set_data (sqe, result);
           this->register_result (result);
-          int submit_result = this->uring_proactor_->submit_sqe ();
+          int const submit_result = this->uring_proactor_->submit_sqe ();
           if (submit_result < 0)
             {
               this->unregister_result (result);
@@ -1585,7 +1585,7 @@ ACE_Uring_Asynch_Read_Dgram_Result::complete (size_t bytes_transferred,
   if (success && this->message_block_ != 0)
     this->message_block_->wr_ptr (bytes_transferred);
 
-  ACE_Handler *handler = this->handler ();
+  ACE_Handler *const handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Read_Dgram::Result result (this);
@@ -1652,7 +1652,7 @@ ACE_Uring_Asynch_Read_Dgram::recv (ACE_Message_Block *message_block,
                                                       this->proactor_),
                   -1);
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
-  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
   if (!sqe)
     {
       delete result;
@@ -1709,7 +1709,7 @@ ACE_Uring_Asynch_Write_Dgram_Result::complete (size_t bytes_transferred,
   if (success && this->message_block_ != 0)
     this->message_block_->rd_ptr (bytes_transferred);
 
-  ACE_Handler *handler = this->handler ();
+  ACE_Handler *const handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Write_Dgram::Result result (this);
@@ -1791,7 +1791,7 @@ ACE_Uring_Asynch_Write_Dgram::send (ACE_Message_Block *message_block,
     }
 
   ACE_GUARD_RETURN (ACE_Thread_Mutex, ace_mon, this->uring_proactor_->sq_mutex (), -1);
-  struct io_uring_sqe *sqe = this->uring_proactor_->get_sqe ();
+  struct io_uring_sqe *const sqe = this->uring_proactor_->get_sqe ();
   if (!sqe)
     {
       delete result;
@@ -1878,7 +1878,7 @@ ACE_Uring_Asynch_Transmit_File_Result::complete (size_t bytes_transferred,
 {
   this->bytes_transferred_ = bytes_transferred;
   this->error_ = error;
-  ACE_Handler *handler = this->handler ();
+  ACE_Handler *const handler = this->handler ();
   if (handler != 0)
     {
       ACE_Asynch_Transmit_File::Result result (this);

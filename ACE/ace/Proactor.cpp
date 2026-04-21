@@ -614,11 +614,8 @@ ACE_Proactor::close (void)
 {
   // Stop the timer thread before tearing down the implementation it
   // posts completions into.
-  if (this->timer_handler_)
-    {
-      delete this->timer_handler_;
-      this->timer_handler_ = 0;
-    }
+  delete this->timer_handler_;
+  this->timer_handler_ = 0;
 
   // Close the implementation.
   if (this->implementation ()->close () == -1)

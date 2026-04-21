@@ -102,11 +102,8 @@ ACE_POSIX_Proactor::~ACE_POSIX_Proactor (void)
 int
 ACE_POSIX_Proactor::close (void)
 {
-  if (this->pseudo_task_ != 0)
-    {
-      delete this->pseudo_task_;
-      this->pseudo_task_ = 0;
-    }
+  delete this->pseudo_task_;
+  this->pseudo_task_ = 0;
 
   return 0;
 }

@@ -52,7 +52,7 @@ ACE_Uring_Proactor::ACE_Uring_Proactor (size_t entries)
 {
   ACE_TRACE ("ACE_Uring_Proactor::ACE_Uring_Proactor");
 
-  int ret = ::io_uring_queue_init (entries, &this->ring_, 0);
+  int const ret = ::io_uring_queue_init (entries, &this->ring_, 0);
   if (ret < 0)
     {
       errno = -ret;
@@ -138,7 +138,7 @@ ACE_Uring_Proactor::handle_events (ACE_Time_Value &wait_time)
 int
 ACE_Uring_Proactor::handle_events (void)
 {
-  const int result = this->process_cqes (DEFAULT_CQE_BATCH_SIZE);
+  int const result = this->process_cqes (DEFAULT_CQE_BATCH_SIZE);
   return result > 0 ? 1 : result;
 }
 
@@ -191,7 +191,7 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
       if (processed == 0)
         {
           ACE_GUARD_RETURN (ACE_Thread_Mutex, sq_guard, this->sq_mutex_, -1);
-          const int submit_result = this->submit_pending_sqe ();
+          int const submit_result = this->submit_pending_sqe ();
           if (submit_result < 0)
             {
               errno = -submit_result;
@@ -205,7 +205,7 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
       size_t bytes_transferred = 0;
       int error = 0;
       int ret = 0;
-      bool should_wait = (processed == 0);
+      bool const should_wait = (processed == 0);
 
       {
         ACE_GUARD_RETURN (ACE_Thread_Mutex, guard, this->cq_mutex_, -1);
@@ -221,7 +221,7 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
                   ret = ::io_uring_peek_cqe (&this->ring_, &cqe);
                 else
                   {
-                    ACE_Time_Value local_wait_time = *wait_time;
+                    ACE_Time_Value const local_wait_time = *wait_time;
                     struct __kernel_timespec timeout;
                     timeout.tv_sec = local_wait_time.sec ();
                     timeout.tv_nsec = local_wait_time.usec () * 1000;
@@ -288,8 +288,7 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
 
       ++processed;
 
-      if (result == 0
-          )
+      if (result == 0)
         continue;
 
       result->complete (bytes_transferred,
@@ -381,7 +380,7 @@ ACE_Uring_Proactor::signal_submitter (void)
 int
 ACE_Uring_Proactor::arm_submit_wakeup_locked (void)
 {
-  struct io_uring_sqe *sqe = ::io_uring_get_sqe (&this->ring_);
+  struct io_uring_sqe *const sqe = ::io_uring_get_sqe (&this->ring_);
   if (sqe == 0)
     {
       errno = EAGAIN;
@@ -710,7 +709,7 @@ ACE_Uring_Proactor::post_wakeup_completions (int count)
 
   for (int i = 0; i < count; ++i)
     {
-      struct io_uring_sqe *sqe = ::io_uring_get_sqe (&this->ring_);
+      struct io_uring_sqe *const sqe = ::io_uring_get_sqe (&this->ring_);
       if (!sqe)
         break;
       ::io_uring_prep_nop (sqe);
