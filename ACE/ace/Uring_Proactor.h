@@ -22,6 +22,7 @@
 
 #if defined (ACE_HAS_AIO_CALLS) && defined (ACE_HAS_IO_URING)
 
+#include "ace/Atomic_Op.h"
 #include "ace/OS_NS_Thread.h"
 #include "ace/Proactor_Impl.h"
 #include "ace/Thread_Mutex.h"
@@ -215,7 +216,7 @@ private:
   bool is_initialized_;
   bool submit_signal_pending_;
   ACE_HANDLE submit_wakeup_handle_;
-  ACE_thread_t dispatch_thread_id_;
+  ACE_Atomic_Op<ACE_Thread_Mutex, ACE_thread_t> dispatch_thread_id_;
   mutable ACE_Thread_Mutex dispatch_mutex_;
   mutable ACE_Thread_Mutex sq_mutex_;
   mutable ACE_Thread_Mutex cq_mutex_;

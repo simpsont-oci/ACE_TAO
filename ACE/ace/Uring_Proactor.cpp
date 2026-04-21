@@ -410,7 +410,8 @@ ACE_Uring_Proactor::drain_submit_wakeup_locked (void)
 bool
 ACE_Uring_Proactor::on_dispatch_thread (void) const
 {
-  return ACE_OS::thr_equal (ACE_OS::thr_self (), this->dispatch_thread_id_) != 0;
+  return ACE_OS::thr_equal (ACE_OS::thr_self (),
+                            this->dispatch_thread_id_.value ()) != 0;
 }
 
 ACE_Asynch_Read_Stream_Impl *ACE_Uring_Proactor::create_asynch_read_stream (void)

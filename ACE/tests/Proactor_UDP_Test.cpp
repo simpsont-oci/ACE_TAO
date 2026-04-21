@@ -963,6 +963,8 @@ Server::go (ACE_HANDLE handle, const ACE_INET_Addr &client)
 
   // Lock this before initiating I/O, else it may complete while we're
   // still setting up.
+  bool has_io = false;
+
   {
     ACE_GUARD (ACE_SYNCH_MUTEX, monitor, this->lock_);
 
@@ -976,9 +978,11 @@ Server::go (ACE_HANDLE handle, const ACE_INET_Addr &client)
                   ACE_TEXT ("Server::ACE_Asynch_Read_Dgram::open")));
     else
       this->initiate_read ();
+
+    has_io = this->io_count_ > 0;
   }
 
-  if (this->io_count_ > 0)
+  if (has_io)
     return;
 
   delete this;     // Error setting up I/O factories
