@@ -361,6 +361,7 @@ protected:
 
 private:
   int initiate_write_file (void);
+  void fail_and_end_event_loop (void);
 
 private:
    // Output file
@@ -372,6 +373,7 @@ private:
   ACE_Message_Block *even_chain_;
   long io_count_;
   char receiver_count_;
+  bool failed_;
 };
 
 // *************************************************************
@@ -417,7 +419,8 @@ Receiver::~Receiver (void)
   if (this->socket_handle_ != ACE_INVALID_HANDLE)
     ACE_OS::closesocket (this->socket_handle_);
 
-  Receiver::writer_->on_delete_receiver ();
+  if (Receiver::writer_ != 0)
+    Receiver::writer_->on_delete_receiver ();
 
   if (this->partial_chunk_)
     {
@@ -619,6 +622,9 @@ Acceptor::stop (void)
       delete this->list_receivers_[i];
       this->list_receivers_[i] = 0;
     }
+
+  delete Receiver::writer_;
+  Receiver::writer_ = 0;
 }
 
 void
@@ -676,7 +682,8 @@ Writer::Writer (void)
   odd_chain_ (0),
   even_chain_ (0),
   io_count_ (0),
-  receiver_count_ (0)
+  receiver_count_ (0),
+  failed_ (false)
 {
 }
 
@@ -687,6 +694,12 @@ Writer::~Writer (void)
 
   if (this->output_file_handle_ != ACE_INVALID_HANDLE)
     ACE_OS::close (this->output_file_handle_);
+
+  if (this->odd_chain_ != 0)
+    free_chunks_chain (this->odd_chain_);
+
+  if (this->even_chain_ != 0)
+    free_chunks_chain (this->even_chain_);
 
   Receiver::writer_ = 0;
 }
@@ -708,12 +721,16 @@ Writer::on_delete_receiver ()
 
   --this->receiver_count_;
 
+  if (this->failed_)
+    return;
+
   if (0 == this->receiver_count_)
     {
       if (this->io_count_ <= 0)
         // no pending io, so do the work oursleves
         // (if pending io, they'll see the zero receiver count)
-        this->initiate_write_file ();
+        if (this->initiate_write_file () != 0)
+          this->fail_and_end_event_loop ();
     }
 }
 
@@ -747,6 +764,12 @@ int
 Writer::handle_read_chunks_chain (ACE_Message_Block *mb,
                                   int type)
 {
+  if (this->failed_)
+    {
+      free_chunks_chain (mb);
+      return -1;
+    }
+
   ACE_DEBUG ((LM_DEBUG,
               ACE_TEXT ("Writer::handle_read_chunks_chain - (%s) %d bytes\n"),
               (type == ODD) ? ACE_TEXT ("ODD ") : ACE_TEXT ("EVEN"),
@@ -754,7 +777,11 @@ Writer::handle_read_chunks_chain (ACE_Message_Block *mb,
 
   add_to_chunks_chain (ODD == type ? this->odd_chain_ : this->even_chain_, mb);
 
-  this->initiate_write_file ();
+  if (this->initiate_write_file () != 0)
+    {
+      this->fail_and_end_event_loop ();
+      return -1;
+    }
 
   return 0;
 }
@@ -762,6 +789,9 @@ Writer::handle_read_chunks_chain (ACE_Message_Block *mb,
 int
 Writer::initiate_write_file (void)
 {
+  if (this->failed_)
+    return -1;
+
   // find out how much can we merge
   ACE_Message_Block *dummy_last = 0;
   size_t odd_count  = last_chunk (this->odd_chain_, dummy_last);
@@ -872,6 +902,13 @@ Writer::initiate_write_file (void)
 }
 
 void
+Writer::fail_and_end_event_loop (void)
+{
+  this->failed_ = true;
+  ACE_Proactor::instance ()->end_event_loop ();
+}
+
+void
 Writer::handle_write_file (const ACE_Asynch_Write_File::Result &result)
 {
   ACE_Message_Block *mb = &result.message_block ();
@@ -894,8 +931,7 @@ Writer::handle_write_file (const ACE_Asynch_Write_File::Result &result)
                   ACE_TEXT ("Writer::handle_write_file")
                   ACE_TEXT (" - ending proactor event loop after write failure\n")));
 
-      ACE_Proactor::instance ()->end_event_loop ();
-      delete this;
+      this->fail_and_end_event_loop ();
       return;
     }
 
@@ -919,8 +955,7 @@ Writer::handle_write_file (const ACE_Asynch_Write_File::Result &result)
                       ACE_TEXT ("Writer::handle_write_file")
                       ACE_TEXT (" - ending proactor event loop after retry failure\n")));
 
-          ACE_Proactor::instance ()->end_event_loop ();
-          delete this;
+          this->fail_and_end_event_loop ();
         }
       return;
     }
@@ -950,8 +985,7 @@ Writer::handle_write_file (const ACE_Asynch_Write_File::Result &result)
                           ACE_TEXT ("Writer::handle_write_file")
                           ACE_TEXT (" - ending proactor event loop after final flush failure\n")));
 
-              ACE_Proactor::instance ()->end_event_loop ();
-              delete this;
+              this->fail_and_end_event_loop ();
             }
           return;
         }

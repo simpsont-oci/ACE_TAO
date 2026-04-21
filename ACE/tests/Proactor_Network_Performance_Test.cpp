@@ -156,8 +156,14 @@ namespace
       (static_cast<double> (delta.usec ()) / 1000000.0);
   }
 
+  int parse_unsigned_long_arg (const ACE_TCHAR *text,
+                               unsigned long &value);
   int parse_size_arg (const ACE_TCHAR *text,
                       size_t &value);
+  int parse_u_short_arg (const ACE_TCHAR *text,
+                         u_short &value);
+  int parse_int_arg (const ACE_TCHAR *text,
+                     int &value);
   int prepare_socket_handle (ACE_HANDLE handle);
   int configure_udp_socket_buffer (ACE_HANDLE handle,
                                    int option_name,
@@ -789,7 +795,7 @@ namespace
 
       if (result.bytes_transferred () < result.bytes_to_write ())
         {
-          mb.rd_ptr (result.bytes_transferred ());
+          this->state_.note_write (result.bytes_transferred (), false);
           if (this->ws_.write (mb,
                                result.bytes_to_write () - result.bytes_transferred ()) != 0)
             {
@@ -1308,24 +1314,29 @@ namespace
               return -1;
             break;
           case 'a':
-            config.max_aio_operations =
-              static_cast<size_t> (ACE_OS::atoi (get_opt.opt_arg ()));
+            if (parse_size_arg (get_opt.opt_arg (),
+                                config.max_aio_operations) != 0)
+              return -1;
             break;
           case 'b':
-            config.payload_size =
-              static_cast<size_t> (ACE_OS::atoi (get_opt.opt_arg ()));
+            if (parse_size_arg (get_opt.opt_arg (),
+                                config.payload_size) != 0)
+              return -1;
             break;
           case 'm':
-            config.messages_per_endpoint =
-              static_cast<size_t> (ACE_OS::atoi (get_opt.opt_arg ()));
+            if (parse_size_arg (get_opt.opt_arg (),
+                                config.messages_per_endpoint) != 0)
+              return -1;
             break;
           case 'n':
-            config.sessions =
-              static_cast<size_t> (ACE_OS::atoi (get_opt.opt_arg ()));
+            if (parse_size_arg (get_opt.opt_arg (),
+                                config.sessions) != 0)
+              return -1;
             break;
           case 'p':
-            config.listen_port =
-              static_cast<u_short> (ACE_OS::atoi (get_opt.opt_arg ()));
+            if (parse_u_short_arg (get_opt.opt_arg (),
+                                   config.listen_port) != 0)
+              return -1;
             break;
           case 't':
             if (Proactor_Test_Backend::parse_type (get_opt.opt_arg (), config.backend) != 0
@@ -1333,11 +1344,14 @@ namespace
               return -1;
             break;
           case 'T':
-            config.thread_count = ACE_OS::atoi (get_opt.opt_arg ());
+            if (parse_int_arg (get_opt.opt_arg (),
+                               config.thread_count) != 0)
+              return -1;
             break;
           case 'w':
-            config.write_depth =
-              static_cast<size_t> (ACE_OS::atoi (get_opt.opt_arg ()));
+            if (parse_size_arg (get_opt.opt_arg (),
+                                config.write_depth) != 0)
+              return -1;
             break;
           default:
             return -1;
@@ -1362,15 +1376,66 @@ namespace
   }
 
   int
-  parse_size_arg (const ACE_TCHAR *text,
-                  size_t &value)
+  parse_unsigned_long_arg (const ACE_TCHAR *text,
+                           unsigned long &value)
   {
+    if (text == 0 || *text == 0)
+      return -1;
+
+    for (const ACE_TCHAR *pos = text; *pos != 0; ++pos)
+      if (*pos < static_cast<ACE_TCHAR> ('0')
+          || *pos > static_cast<ACE_TCHAR> ('9'))
+        return -1;
+
     ACE_TCHAR *end = 0;
     errno = 0;
     const unsigned long parsed = ACE_OS::strtoul (text, &end, 10);
     if (errno != 0 || end == text || (end != 0 && *end != 0))
       return -1;
-    value = static_cast<size_t> (parsed);
+
+    value = parsed;
+    return 0;
+  }
+
+  int
+  parse_size_arg (const ACE_TCHAR *text,
+                  size_t &value)
+  {
+    unsigned long parsed = 0;
+    if (parse_unsigned_long_arg (text, parsed) != 0)
+      return -1;
+
+    size_t const converted = static_cast<size_t> (parsed);
+    if (static_cast<unsigned long> (converted) != parsed)
+      return -1;
+
+    value = converted;
+    return 0;
+  }
+
+  int
+  parse_u_short_arg (const ACE_TCHAR *text,
+                     u_short &value)
+  {
+    unsigned long parsed = 0;
+    if (parse_unsigned_long_arg (text, parsed) != 0
+        || parsed > USHRT_MAX)
+      return -1;
+
+    value = static_cast<u_short> (parsed);
+    return 0;
+  }
+
+  int
+  parse_int_arg (const ACE_TCHAR *text,
+                 int &value)
+  {
+    unsigned long parsed = 0;
+    if (parse_unsigned_long_arg (text, parsed) != 0
+        || parsed > INT_MAX)
+      return -1;
+
+    value = static_cast<int> (parsed);
     return 0;
   }
 

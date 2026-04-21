@@ -775,6 +775,8 @@ ACE_POSIX_AIOCB_Proactor::ACE_POSIX_AIOCB_Proactor (size_t max_aio_operations)
 
   this->create_result_aiocb_list ();
 
+  this->create_notify_manager ();
+
   // start pseudo-asynchronous accept task
   // one per all future acceptors
   this->get_asynch_pseudo_task().start ();

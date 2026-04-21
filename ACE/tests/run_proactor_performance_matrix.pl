@@ -132,6 +132,9 @@ sub powershell_quote {
   return "'$value'";
 }
 
+my $queried_build_macros = 0;
+my %build_macros;
+
 sub has_io_uring {
   return 0 if $is_windows;
   if (-e "$ace_root/ace/config.h") {
@@ -151,9 +154,57 @@ sub has_io_uring {
   return 0;
 }
 
+sub query_build_macros {
+  return %build_macros if $queried_build_macros;
+  $queried_build_macros = 1;
+
+  return %build_macros if $is_windows;
+
+  my $cxx = value_or_default($ENV{CXX}, '');
+  $cxx = 'g++' if $cxx eq '';
+  my @cmd = shellwords($cxx);
+  push @cmd, shellwords($ENV{CPPFLAGS}) if defined $ENV{CPPFLAGS};
+  push @cmd, ('-dM', '-E', "-I$ace_root", '-D_GNU_SOURCE');
+  push @cmd, '-DACE_HAS_IO_URING' if has_io_uring();
+  push @cmd, ('-include', 'ace/config-all.h', '-x', 'c++', '/dev/null');
+
+  my $fh;
+  if (!open $fh, '-|', @cmd) {
+    print STDERR "warning: unable to query ACE build macros: $!\n";
+    return %build_macros;
+  }
+
+  while (my $line = <$fh>) {
+    if ($line =~ /^\s*#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)\b/) {
+      $build_macros{$1} = 1;
+    }
+  }
+
+  if (!close $fh) {
+    print STDERR "warning: ACE build macro query failed; backend availability may be incomplete\n";
+    %build_macros = ();
+  }
+
+  return %build_macros;
+}
+
+sub build_has_define {
+  my ($name) = @_;
+  my %macros = query_build_macros();
+  return exists $macros{$name} ? 1 : 0;
+}
+
 sub candidate_backends {
-  my @backends = $is_windows ? qw(win32) : qw(aiocb sig cb);
-  push @backends, 'uring' if has_io_uring();
+  my @backends;
+  if ($is_windows) {
+    @backends = qw(win32);
+  } elsif (build_has_define('ACE_HAS_AIO_CALLS')) {
+    push @backends, 'aiocb';
+    push @backends, 'sig' if build_has_define('ACE_HAS_POSIX_REALTIME_SIGNALS');
+    push @backends, 'sun' if build_has_define('sun');
+    push @backends, 'cb' if !build_has_define('ACE_HAS_BROKEN_SIGEVENT_STRUCT');
+    push @backends, 'uring' if build_has_define('ACE_HAS_IO_URING');
+  }
   return @backends;
 }
 

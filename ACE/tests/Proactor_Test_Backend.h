@@ -419,9 +419,13 @@ namespace Proactor_Test_Backend
     if (create_impl (type, max_aio_operations, implementation) != 0)
       return -1;
 
-    ACE_NEW_RETURN (proactor,
-                    ACE_Proactor (implementation, 1),
-                    -1);
+    ACE_NEW_NORETURN (proactor,
+                      ACE_Proactor (implementation, 1));
+    if (proactor == 0)
+      {
+        delete implementation;
+        return -1;
+      }
 
     if (install_singleton)
       ACE_Proactor::instance (proactor, 1);
