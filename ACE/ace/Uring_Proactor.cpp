@@ -227,7 +227,7 @@ ACE_Uring_Proactor::process_cqes (int max_to_process, const ACE_Time_Value *wait
                     timeout.tv_nsec = local_wait_time.usec () * 1000;
                     ret = ::io_uring_wait_cqe_timeout (&this->ring_,
                                                        &cqe,
-                                                       const_cast<__kernel_timespec *> (&timeout));
+                                                       &timeout);
                   }
               }
             else

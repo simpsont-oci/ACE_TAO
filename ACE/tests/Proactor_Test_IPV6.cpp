@@ -1858,6 +1858,7 @@ run_main (int argc, ACE_TCHAR *argv[])
   Acceptor *acceptor = 0;
   Connector *connector = 0;
   int started = 0;
+  int run_status = 0;
 
   if (task1.start (threads, proactor_type, max_aio_operations) == 0)
     {
@@ -1886,18 +1887,30 @@ run_main (int argc, ACE_TCHAR *argv[])
             rc += connector->start (addr, clients);
         }
 
-      // Let the sessions get going, then wait for them to drain while
-      // the acceptor and connector are still alive. Destroying them
-      // earlier leaves callbacks racing with stack lifetime.
-      ACE_OS::sleep (3);
+      if (rc <= 0)
+        {
+          ACE_ERROR ((LM_ERROR,
+                      ACE_TEXT ("(%t) No Proactor_Test_IPV6 sessions were started.\n")));
+          run_status = -1;
+        }
+      else
+        {
+          // Let the sessions get going, then wait for them to drain while
+          // the acceptor and connector are still alive. Destroying them
+          // earlier leaves callbacks racing with stack lifetime.
+          ACE_OS::sleep (3);
 
-      ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("(%t) Sleeping til sessions run down.\n")));
-      ACE_Time_Value limit = ACE_OS::gettimeofday () + ACE_Time_Value (30);
-      while (!test.testing_done () && ACE_OS::gettimeofday () < limit)
-        ACE_OS::sleep (1);
+          ACE_DEBUG ((LM_DEBUG, ACE_TEXT ("(%t) Sleeping til sessions run down.\n")));
+          ACE_Time_Value limit = ACE_OS::gettimeofday () + ACE_Time_Value (30);
+          while (!test.testing_done () && ACE_OS::gettimeofday () < limit)
+            ACE_OS::sleep (1);
 
-      if (!test.testing_done ())
-        ACE_ERROR ((LM_ERROR, ACE_TEXT ("(%t) Timed out waiting for sessions to run down.\n")));
+          if (!test.testing_done ())
+            {
+              ACE_ERROR ((LM_ERROR, ACE_TEXT ("(%t) Timed out waiting for sessions to run down.\n")));
+              run_status = -1;
+            }
+        }
 
       test.stop_all ();
 
@@ -1906,6 +1919,12 @@ run_main (int argc, ACE_TCHAR *argv[])
       if (connector != 0)
         connector->cancel ();
       ACE_OS::sleep (1);
+    }
+  else
+    {
+      ACE_ERROR ((LM_ERROR,
+                  ACE_TEXT ("(%t) Failed to start Proactor_Test_IPV6 task.\n")));
+      run_status = -1;
     }
 
   if (started)
@@ -1925,7 +1944,7 @@ run_main (int argc, ACE_TCHAR *argv[])
 
   ACE_END_TEST;
 
-  return 0;
+  return run_status;
 }
 
 #else
