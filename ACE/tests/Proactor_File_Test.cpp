@@ -261,13 +261,17 @@ FileIOHandler::handle_read_file(const ACE_Asynch_Read_File::Result &result)
 #endif
     return;
   }
+
+  unsigned long const next_offset =
+    result.offset () + static_cast<unsigned long> (result.bytes_transferred ());
+
   // If the read failed, queue up another one using the same message block
   if (!result.success() || result.bytes_transferred() == 0)
   {
     //ACE_DEBUG((LM_INFO, ACE_TEXT("FileIOHandler receive timeout.\n")));
     reader_.read(mb,
                  mb.space(),
-                 result.offset () + result.bytes_transferred ());
+                 next_offset);
   }
   else
   {
@@ -285,13 +289,13 @@ FileIOHandler::handle_read_file(const ACE_Asynch_Read_File::Result &result)
     // Release the message block when we're done with it
     mb.release();
 
-    if ((result.offset () + result.bytes_transferred ()) < 256)
+    if (next_offset < 256)
     {
       // Our processing is done; prime the read process again
       ACE_Message_Block *new_mb;
       ACE_NEW_NORETURN(new_mb, ACE_Message_Block(FILE_FRAME_SIZE));
       if (reader_.read(*new_mb, new_mb->space(),
-                       result.offset () + result.bytes_transferred ()) != 0)
+                       next_offset) != 0)
       {
         int errnr = ACE_OS::last_error ();
         ACE_DEBUG(

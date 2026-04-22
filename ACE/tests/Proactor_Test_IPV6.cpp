@@ -1830,6 +1830,8 @@ run_main (int argc, ACE_TCHAR *argv[])
   if (::parse_args (argc, argv) == -1)
     return -1;
 
+  int run_status = 0;
+
 #if !defined (ACE_HAS_IPV6)
   ACE_ERROR ((LM_ERROR,
               ACE_TEXT ("IPv6 is not supported by ACE on this platform.\n")
@@ -1858,7 +1860,6 @@ run_main (int argc, ACE_TCHAR *argv[])
   Acceptor *acceptor = 0;
   Connector *connector = 0;
   int started = 0;
-  int run_status = 0;
 
   if (task1.start (threads, proactor_type, max_aio_operations) == 0)
     {
