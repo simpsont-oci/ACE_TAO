@@ -1918,10 +1918,7 @@ ACE_Uring_Asynch_Transmit_File::transmit_file (
   // valid on Linux because one splice endpoint must be a pipe. Fail fast
   // until a real async transmit-file strategy is implemented for io_uring.
   errno = ENOTSUP;
-  ACELIB_ERROR_RETURN ((LM_ERROR,
-                        ACE_TEXT ("ACE_Uring_Asynch_Transmit_File::transmit_file: ")
-                        ACE_TEXT ("not supported yet\n")),
-                       -1);
+  return -1;
 }
 
 ACE_END_VERSIONED_NAMESPACE_DECL

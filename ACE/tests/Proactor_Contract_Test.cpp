@@ -16,6 +16,7 @@
 #include "ace/FILE_IO.h"
 #include "ace/Get_Opt.h"
 #include "ace/INET_Addr.h"
+#include "ace/Log_Category.h"
 #include "ace/Message_Block.h"
 #include "ace/OS_NS_dirent.h"
 #include "ace/OS_NS_errno.h"
@@ -32,6 +33,39 @@
 namespace
 {
   Proactor_Test_Backend::Type proactor_type = Proactor_Test_Backend::BACKEND_DEFAULT;
+
+  class Library_Error_Mask_Guard
+  {
+  public:
+    Library_Error_Mask_Guard (void)
+      : category_ (ACE_Log_Category::ace_lib ())
+      , thread_category_ (category_.per_thr_obj ())
+      , category_mask_ (category_.priority_mask ())
+      , thread_mask_ (thread_category_ != 0
+                      ? thread_category_->priority_mask ()
+                      : 0)
+    {
+      category_.priority_mask (category_mask_ & ~LM_ERROR);
+      if (thread_category_ != 0)
+        thread_category_->priority_mask (thread_mask_ & ~LM_ERROR);
+    }
+
+    ~Library_Error_Mask_Guard (void)
+    {
+      category_.priority_mask (category_mask_);
+      if (thread_category_ != 0)
+        thread_category_->priority_mask (thread_mask_);
+    }
+
+  private:
+    Library_Error_Mask_Guard (const Library_Error_Mask_Guard &);
+    Library_Error_Mask_Guard &operator= (const Library_Error_Mask_Guard &);
+
+    ACE_Log_Category &category_;
+    ACE_Log_Category_TSS *thread_category_;
+    u_long const category_mask_;
+    u_long const thread_mask_;
+  };
 
   class Accept_Handler : public ACE_Handler
   {
@@ -490,12 +524,23 @@ namespace
         handler.connect_handle_ = ACE_INVALID_HANDLE;
         handler.error_ = 0;
         errno = 0;
-        const int result =
+        int result = 0;
+        {
+          Library_Error_Mask_Guard error_mask_guard;
 #if defined (ACE_WIN32)
-          connector.connect (ACE_INVALID_HANDLE, remote_addr, ACE_Addr::sap_any, 0, 0);
+          result = connector.connect (ACE_INVALID_HANDLE,
+                                      remote_addr,
+                                      ACE_Addr::sap_any,
+                                      0,
+                                      0);
 #else
-          connector.connect (ACE_INVALID_HANDLE, remote_addr, busy_local_addr, 0, 0);
+          result = connector.connect (ACE_INVALID_HANDLE,
+                                      remote_addr,
+                                      busy_local_addr,
+                                      0,
+                                      0);
 #endif /* ACE_WIN32 */
+        }
 
         if (result == 0)
           {
@@ -653,8 +698,14 @@ namespace
       }
 
     errno = 0;
-    const int result =
-      transmit_file.transmit_file (file.get_handle (), 0, 1, 0, 0, 0, 0, 0);
+    const int result = transmit_file.transmit_file (file.get_handle (),
+                                                    0,
+                                                    1,
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    0);
     if (proactor_type == Proactor_Test_Backend::BACKEND_URING)
       {
         if (result != -1 || errno != ENOTSUP)
