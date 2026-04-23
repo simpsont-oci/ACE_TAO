@@ -127,6 +127,35 @@ jobs:
       run: msbuild -maxcpucount -p:Platform=${{ matrix.BuildPlatform }} -p:Configuration=${{ matrix.BuildConfiguration }} ACE/tests/tests.sln
     - name: Build solution TAO/tests/IDL_Test/IDL_Test.sln
       run: msbuild -maxcpucount -p:Platform=${{ matrix.BuildPlatform }} -p:Configuration=${{ matrix.BuildConfiguration }} TAO/tests/IDL_Test/IDL_Test.sln
+    - name: Run ACE full test suite
+      if: matrix.name == 'VS2022Debug64Cxx20'
+      working-directory: ${{ env.ACE_ROOT }}/tests
+      shell: pwsh
+      run: |
+        $exeSubDir = "${{ matrix.BuildPlatform }}/${{ matrix.BuildConfiguration }}"
+        $env:PATH = "${env:ACE_ROOT}\lib;${env:ACE_ROOT}\lib\${{ matrix.BuildPlatform }}\${{ matrix.BuildConfiguration }};${env:ACE_ROOT}\tests\${{ matrix.BuildPlatform }}\${{ matrix.BuildConfiguration }};${{ github.workspace }}\vcpkg_installed\${{ matrix.vcpkgarch }}\debug\bin;${{ github.workspace }}\vcpkg_installed\${{ matrix.vcpkgarch }}\bin;$env:PATH"
+        & perl .\run_test.pl -ExeSubDir $exeSubDir -Config ARCH -Config Win32 -Config MSVC -Config FIXED_BUGS_ONLY -Config SSL 2>&1 |
+          Tee-Object -FilePath run_test_full_suite.log
+        $runExit = $LASTEXITCODE
+        $failures = Select-String -Path run_test_full_suite.log -Pattern '^(Error|ERROR):', 'auto_run_tests_finished:.*Result:(?!0\b)-?\d+'
+        if ($runExit -ne 0) {
+          Write-Error "run_test.pl failed with exit status $runExit"
+          exit $runExit
+        }
+        if ($failures) {
+          $failures | ForEach-Object { Write-Output $_.Line }
+          Write-Error "ACE full test suite reported errors or failing test results."
+          exit 1
+        }
+    - name: Upload ACE full test suite logs
+      if: always() && matrix.name == 'VS2022Debug64Cxx20'
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-ace-full-test-suite
+        path: |
+          ${{ env.ACE_ROOT }}/tests/run_test_full_suite.log
+          ${{ env.ACE_ROOT }}/tests/log
+        if-no-files-found: ignore
     - name: Run Proactor Win32 correctness smoke tests
       if: matrix.name == 'VS2022Debug64Cxx17'
       working-directory: ${{ env.ACE_ROOT }}/tests
