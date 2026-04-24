@@ -18,6 +18,7 @@ use POSIX qw(WNOHANG strftime);
 use Text::ParseWords qw(shellwords);
 use Time::HiRes qw(sleep time);
 
+# Return a default value when the requested setting is undefined.
 sub value_or_default {
   my ($value, $default) = @_;
   return defined $value ? $value : $default;
@@ -59,6 +60,7 @@ my @requested_backends;
 my $list_only = 0;
 my $help = 0;
 
+# Print command-line usage and supported environment variables.
 sub usage {
   print <<'EOF';
 Usage: ./run_proactor_correctness_matrix.pl [options]
@@ -83,6 +85,7 @@ Environment:
 EOF
 }
 
+# Exit with an error if a required file is missing.
 sub require_file {
   my ($path, $message) = @_;
   if (!-e $path) {
@@ -91,6 +94,7 @@ sub require_file {
   }
 }
 
+# Return non-zero if the requested value appears in the list.
 sub contains_value {
   my ($needle, @values) = @_;
   for my $value (@values) {
@@ -99,6 +103,7 @@ sub contains_value {
   return 0;
 }
 
+# Quote an argument for a POSIX shell command line.
 sub shell_quote {
   my ($value) = @_;
   return "''" if !defined $value || $value eq '';
@@ -107,6 +112,7 @@ sub shell_quote {
   return "'$value'";
 }
 
+# Quote an argument for embedding in a PowerShell command line.
 sub powershell_quote {
   my ($value) = @_;
   $value = '' if !defined $value;
@@ -117,6 +123,7 @@ sub powershell_quote {
 my $queried_build_macros = 0;
 my %build_macros;
 
+# Return non-zero if the current ACE build enables io_uring support.
 sub has_io_uring {
   return 0 if $is_windows;
   if (-e "$ace_root/ace/config.h") {
@@ -136,6 +143,7 @@ sub has_io_uring {
   return 0;
 }
 
+# Query the C++ preprocessor for the active ACE build macros.
 sub query_build_macros {
   return %build_macros if $queried_build_macros;
   $queried_build_macros = 1;
@@ -170,12 +178,14 @@ sub query_build_macros {
   return %build_macros;
 }
 
+# Return non-zero if the queried build macros include the named define.
 sub build_has_define {
   my ($name) = @_;
   my %macros = query_build_macros();
   return exists $macros{$name} ? 1 : 0;
 }
 
+# Return non-zero if ACE/ace/config.h defines the requested macro.
 sub ace_config_has_define {
   my ($name) = @_;
   my $path = "$ace_root/ace/config.h";
@@ -192,6 +202,7 @@ sub ace_config_has_define {
   return 0;
 }
 
+# Return non-zero if IPv6 loopback is available on this host.
 sub ipv6_loopback_available {
   if ($is_windows) {
     my $status = system('ping', '-n', '1', '::1');
@@ -212,6 +223,7 @@ sub ipv6_loopback_available {
   return 0;
 }
 
+# Resolve the list of Proactor backends expected on this platform.
 sub candidate_backends {
   my @backends;
   if ($is_windows) {
@@ -227,6 +239,7 @@ sub candidate_backends {
   return @backends;
 }
 
+# Resolve a test binary path, including the Windows .exe suffix.
 sub resolve_test_binary {
   my ($path) = @_;
   return $path if -e $path;
@@ -234,11 +247,13 @@ sub resolve_test_binary {
   return $path;
 }
 
+# Return non-zero if failures for this backend should be treated as expected.
 sub backend_is_expected_fail {
   my ($backend) = @_;
   return $expected_fail_backends =~ /(?:^|\s)\Q$backend\E(?:\s|$)/ ? 1 : 0;
 }
 
+# Return non-zero if the test uses a listen or connect port.
 sub test_needs_port {
   my ($test_name) = @_;
   return ($test_name eq 'Proactor_Network_Performance_Test'
@@ -248,11 +263,13 @@ sub test_needs_port {
        || $test_name eq 'Proactor_Scatter_Gather_Test') ? 1 : 0;
 }
 
+# Return non-zero if the case requires ACE IPv6 support.
 sub case_requires_ipv6 {
   my ($case) = @_;
   return $case->{test_name} eq 'Proactor_Test_IPV6' ? 1 : 0;
 }
 
+# Translate Perl wait status values into process exit codes.
 sub interpret_wait_status {
   my ($status) = @_;
   return 255 if !defined $status;
@@ -260,6 +277,7 @@ sub interpret_wait_status {
   return $status >> 8;
 }
 
+# Run a command with a timeout using PowerShell on Windows.
 sub run_command_with_timeout_windows {
   my ($cmd_ref, $stdout_log, $timeout) = @_;
 
@@ -310,6 +328,7 @@ sub run_command_with_timeout_windows {
   return interpret_wait_status($?);
 }
 
+# Run a command with a timeout on the current platform.
 sub run_command_with_timeout {
   my ($cmd_ref, $stdout_log, $timeout) = @_;
 
@@ -502,6 +521,7 @@ my $skip_count = 0;
 my $xfail_count = 0;
 my $port_offset = 0;
 
+# Execute one test/backend matrix entry and archive its logs.
 sub run_case {
   my ($case, $backend) = @_;
 

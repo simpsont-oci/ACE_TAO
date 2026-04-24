@@ -36,6 +36,7 @@
 
 namespace Proactor_Test_Backend
 {
+  /// Canonical backend identifiers accepted by the shared test parser.
   enum Type
   {
     BACKEND_DEFAULT = 0,
@@ -47,6 +48,7 @@ namespace Proactor_Test_Backend
     BACKEND_URING
   };
 
+  /// Return the canonical command-line name for a backend.
   inline const ACE_TCHAR *
   name (Type type)
   {
@@ -70,6 +72,7 @@ namespace Proactor_Test_Backend
       }
   }
 
+  /// Parse a backend name or alias into its enum value.
   inline int
   parse_type (const ACE_TCHAR *arg, Type &type)
   {
@@ -131,6 +134,7 @@ namespace Proactor_Test_Backend
     return -1;
   }
 
+  /// Return non-zero if the backend is available in the current build.
   inline int
   is_available (Type type)
   {
@@ -185,6 +189,7 @@ namespace Proactor_Test_Backend
     return 0;
   }
 
+  /// Resolve the default selector to the backend chosen by the build.
   inline Type
   concrete_type (Type type)
   {
@@ -214,6 +219,7 @@ namespace Proactor_Test_Backend
 #endif /* ACE_HAS_AIO_CALLS */
   }
 
+  /// Return non-zero if the backend supports scatter/gather test coverage.
   inline int
   supports_scatter_gather (Type type)
   {
@@ -238,6 +244,7 @@ namespace Proactor_Test_Backend
       }
   }
 
+  /// Print the shared backend selection usage text for a test executable.
   inline int
   print_type_usage (ACE_TCHAR *argv0)
   {
@@ -274,6 +281,7 @@ namespace Proactor_Test_Backend
     return -1;
   }
 
+  /// Report that the requested backend is unavailable in this build.
   inline int
   unsupported (Type type)
   {
@@ -283,6 +291,7 @@ namespace Proactor_Test_Backend
     return -1;
   }
 
+  /// Create the requested proactor implementation.
   inline int
   create_impl (Type type,
                size_t max_aio_operations,
@@ -409,6 +418,7 @@ namespace Proactor_Test_Backend
     return -1;
   }
 
+  /// Create an ACE_Proactor wrapper for the requested backend implementation.
   inline int
   create_proactor (Type type,
                    size_t max_aio_operations,

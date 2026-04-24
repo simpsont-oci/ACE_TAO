@@ -406,6 +406,8 @@ protected:
   /// built.
   void create_notify_manager (void);
   void delete_notify_manager (void);
+
+  /// Lazily create the notify manager and report whether it is ready.
   int ensure_notify_manager (void);
 
   /// Define the maximum number of asynchronous I/O requests

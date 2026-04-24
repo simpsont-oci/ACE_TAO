@@ -18,6 +18,7 @@ use POSIX qw(WNOHANG strftime);
 use Text::ParseWords qw(shellwords);
 use Time::HiRes qw(sleep time);
 
+# Return a default value when the requested setting is undefined.
 sub value_or_default {
   my ($value, $default) = @_;
   return defined $value ? $value : $default;
@@ -77,6 +78,7 @@ my @column_order = qw(
   udp_rcvbuf_actual udp_sndbuf_actual
 );
 
+# Print command-line usage and supported environment variables.
 sub usage {
   print <<'EOF';
 Usage: ./run_proactor_performance_matrix.pl [options]
@@ -101,6 +103,7 @@ Environment:
 EOF
 }
 
+# Exit with an error if a required file is missing.
 sub require_file {
   my ($path, $message) = @_;
   if (!-e $path) {
@@ -109,6 +112,7 @@ sub require_file {
   }
 }
 
+# Return non-zero if the requested value appears in the list.
 sub contains_value {
   my ($needle, @values) = @_;
   for my $value (@values) {
@@ -117,6 +121,7 @@ sub contains_value {
   return 0;
 }
 
+# Quote an argument for a POSIX shell command line.
 sub shell_quote {
   my ($value) = @_;
   return "''" if !defined $value || $value eq '';
@@ -125,6 +130,7 @@ sub shell_quote {
   return "'$value'";
 }
 
+# Quote an argument for embedding in a PowerShell command line.
 sub powershell_quote {
   my ($value) = @_;
   $value = '' if !defined $value;
@@ -135,6 +141,7 @@ sub powershell_quote {
 my $queried_build_macros = 0;
 my %build_macros;
 
+# Return non-zero if the current ACE build enables io_uring support.
 sub has_io_uring {
   return 0 if $is_windows;
   if (-e "$ace_root/ace/config.h") {
@@ -154,6 +161,7 @@ sub has_io_uring {
   return 0;
 }
 
+# Query the C++ preprocessor for the active ACE build macros.
 sub query_build_macros {
   return %build_macros if $queried_build_macros;
   $queried_build_macros = 1;
@@ -188,12 +196,14 @@ sub query_build_macros {
   return %build_macros;
 }
 
+# Return non-zero if the queried build macros include the named define.
 sub build_has_define {
   my ($name) = @_;
   my %macros = query_build_macros();
   return exists $macros{$name} ? 1 : 0;
 }
 
+# Resolve the list of Proactor backends expected on this platform.
 sub candidate_backends {
   my @backends;
   if ($is_windows) {
@@ -208,6 +218,7 @@ sub candidate_backends {
   return @backends;
 }
 
+# Resolve a test binary path, including the Windows .exe suffix.
 sub resolve_test_binary {
   my ($path) = @_;
   return $path if -e $path;
@@ -215,6 +226,7 @@ sub resolve_test_binary {
   return $path;
 }
 
+# Translate Perl wait status values into process exit codes.
 sub interpret_wait_status {
   my ($status) = @_;
   return 255 if !defined $status;
@@ -222,6 +234,7 @@ sub interpret_wait_status {
   return $status >> 8;
 }
 
+# Run a command with a timeout using PowerShell on Windows.
 sub run_command_with_timeout_windows {
   my ($cmd_ref, $stdout_log, $timeout) = @_;
 
@@ -272,6 +285,7 @@ sub run_command_with_timeout_windows {
   return interpret_wait_status($?);
 }
 
+# Run a command with a timeout on the current platform.
 sub run_command_with_timeout {
   my ($cmd_ref, $stdout_log, $timeout) = @_;
 
@@ -328,6 +342,7 @@ sub run_command_with_timeout {
   }
 }
 
+# Register one benchmark scenario in the execution order.
 sub add_scenario {
   my ($name, $type, $args, $desc) = @_;
   push @scenario_order, $name;
@@ -336,12 +351,14 @@ sub add_scenario {
   $scenario_desc{$name} = $desc;
 }
 
+# Convert an optional numeric field to a comparable number.
 sub num_value {
   my ($value) = @_;
   return 0 if !defined $value || $value eq '';
   return $value + 0;
 }
 
+# Append a result row to the in-memory table and TSV output.
 sub append_result_row {
   my (%row) = @_;
   push @rows, \%row;
@@ -351,6 +368,7 @@ sub append_result_row {
   close $fh or die "close $results_tsv failed: $!";
 }
 
+# Record a skipped benchmark row.
 sub record_skip {
   my ($benchmark, $scenario, $backend, $message) = @_;
   append_result_row(
@@ -363,6 +381,7 @@ sub record_skip {
   );
 }
 
+# Record a failed benchmark row.
 sub record_failure {
   my ($benchmark, $scenario, $backend, $stdout_log, $native_log) = @_;
   append_result_row(
@@ -376,6 +395,7 @@ sub record_failure {
   );
 }
 
+# Record a successful network benchmark row.
 sub record_network_success {
   my ($scenario, $backend, $fields, $stdout_log, $native_log) = @_;
   append_result_row(
@@ -409,6 +429,7 @@ sub record_network_success {
   );
 }
 
+# Record a successful stress benchmark row.
 sub record_stress_success {
   my ($scenario, $backend, $fields, $stdout_log, $native_log) = @_;
   append_result_row(
@@ -427,6 +448,7 @@ sub record_stress_success {
   );
 }
 
+# Parse PERF_RESULT key-value pairs from one output line.
 sub parse_perf_fields {
   my ($line) = @_;
   my %fields;
@@ -436,6 +458,7 @@ sub parse_perf_fields {
   return \%fields;
 }
 
+# Extract PERF_RESULT lines for the requested benchmark from a log.
 sub extract_perf_lines {
   my ($native_log, $benchmark) = @_;
   return () if !-f $native_log;
@@ -453,6 +476,7 @@ sub extract_perf_lines {
   return @lines;
 }
 
+# Return non-zero if IPv6 loopback is available on this host.
 sub ipv6_loopback_available {
   if ($is_windows) {
     my $status = system('ping', '-n', '1', '::1');
@@ -473,6 +497,7 @@ sub ipv6_loopback_available {
   return 0;
 }
 
+# Generate and print the final benchmark summary report.
 sub generate_summary {
   open my $fh, '>', $summary_txt or die "open $summary_txt failed: $!";
 
@@ -706,6 +731,7 @@ if ($list_only) {
   exit 0;
 }
 
+# Run one Proactor_Stress_Test backend instance and record its metrics.
 sub run_stress_case {
   my ($scenario, $backend) = @_;
 
@@ -766,6 +792,7 @@ sub run_stress_case {
   print "[PASS] $scenario backend=$backend\n";
 }
 
+# Run one Proactor_Network_Performance_Test backend instance and record its metrics.
 sub run_network_case {
   my ($scenario, $backend) = @_;
 

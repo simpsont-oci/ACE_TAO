@@ -33,28 +33,43 @@ ACE_BEGIN_VERSIONED_NAMESPACE_DECL
 /**
  * @class ACE_POSIX_CB_Proactor
  *
- * @brief Implementation of Callback-based Proactor
- * };
+ * @brief Implementation of callback-based Proactor.
  */
 class ACE_Export ACE_POSIX_CB_Proactor : public ACE_POSIX_AIOCB_Proactor
 {
+  /// Tracks pending callback notifications during shutdown.
   class Notification_State
   {
   public:
+    /// Construct the state object using the callback startup semaphore.
     explicit Notification_State (ACE_SYNCH_SEMAPHORE &sema);
 
+    /// Record a newly submitted callback that must finish before close().
     void add_pending (void);
+
+    /// Mark one pending callback as completed.
     void complete_one (void);
+
+    /// Remove one pending callback that was abandoned before completion.
     void abandon_pending (void);
+
+    /// Return the number of callbacks still expected to complete.
     size_t pending (void);
+
+    /// Wait until the pending callback count reaches zero.
     int wait_for_pending_zero (const ACE_Time_Value *abstime);
 
+    /// Hold an internal reference while a callback may still access the state.
     void add_ref (void);
+
+    /// Release a callback lifetime reference.
     void remove_ref (void);
 
+    /// Detach the startup semaphore once callback submission is stable.
     void detach (void);
 
   private:
+    /// Finalize one pending callback update and optionally wake the waiter.
     void finish_pending_i (bool signal_waiter);
 
     ACE_Thread_Mutex mutex_;
@@ -77,8 +92,7 @@ public:
   /// Close down the Proactor.
   virtual int close (void);
 
-  // This only public so the "extern C" completion function can see it
-  // when needed.
+  /// Static completion trampoline used by the POSIX sigevent callback API.
   static void aio_completion_func (sigval cb_data);
 
 protected:
@@ -114,6 +128,7 @@ protected:
   /// Post a result without instantiating the AIOCB notify pipe.
   virtual int post_completion (ACE_POSIX_Asynch_Result *result);
 
+  /// Drop the outstanding callback count for abandoned operations.
   virtual void abandon_pending_aio (void);
 
   /**
@@ -127,6 +142,7 @@ protected:
   /// used to wait the first AIO start
   ACE_SYNCH_SEMAPHORE sema_;
 
+  /// Shared callback lifetime state for in-flight completions.
   Notification_State *notification_state_;
 };
 
