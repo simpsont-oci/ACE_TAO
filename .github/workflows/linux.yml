@@ -233,7 +233,7 @@ jobs:
       run: |
         set -euo pipefail
         export LD_LIBRARY_PATH="${ACE_ROOT}/lib:${ACE_ROOT}/tests:${LD_LIBRARY_PATH:-}"
-        test_configs=(-Config Linux -Config FIXED_BUGS_ONLY -Config SSL)
+        test_configs=(-Config Linux -Config FIXED_BUGS_ONLY -Config GHA)
         if [ "${{ steps.full_suite_uring_probe.outputs.available }}" = "true" ]; then
           test_configs+=(-Config uring)
         fi

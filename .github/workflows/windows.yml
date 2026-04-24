@@ -134,7 +134,7 @@ jobs:
       run: |
         $exeSubDir = "${{ matrix.BuildPlatform }}/${{ matrix.BuildConfiguration }}"
         $env:PATH = "${env:ACE_ROOT}\lib;${env:ACE_ROOT}\lib\${{ matrix.BuildPlatform }}\${{ matrix.BuildConfiguration }};${env:ACE_ROOT}\tests\${{ matrix.BuildPlatform }}\${{ matrix.BuildConfiguration }};${{ github.workspace }}\vcpkg_installed\${{ matrix.vcpkgarch }}\debug\bin;${{ github.workspace }}\vcpkg_installed\${{ matrix.vcpkgarch }}\bin;$env:PATH"
-        & perl .\run_test.pl -ExeSubDir $exeSubDir -Config ARCH -Config Win32 -Config MSVC -Config FIXED_BUGS_ONLY -Config SSL 2>&1 |
+        & perl .\run_test.pl -ExeSubDir $exeSubDir -Config ARCH -Config Win32 -Config MSVC -Config FIXED_BUGS_ONLY -Config GHA 2>&1 |
           Tee-Object -FilePath run_test_full_suite.log
         $runExit = $LASTEXITCODE
         $failures = Select-String -Path run_test_full_suite.log -Pattern '^(Error|ERROR):', 'auto_run_tests_finished:.*Result:(?!0\b)-?\d+'
