@@ -234,6 +234,8 @@ namespace
                           -1);
       }
 
+    const int addr_family = listen_addr.get_type ();
+
     Accept_Handler handler;
     ACE_Asynch_Accept acceptor;
     if (acceptor.open (handler, listen_socket.get_handle (), 0, &proactor) != 0)
@@ -245,7 +247,7 @@ namespace
       }
 
     ACE_Message_Block mb (1024);
-    if (acceptor.accept (mb, 0, ACE_INVALID_HANDLE, 0, 0, ACE_SIGRTMIN, AF_INET) != 0)
+    if (acceptor.accept (mb, 0, ACE_INVALID_HANDLE, 0, 0, ACE_SIGRTMIN, addr_family) != 0)
       {
         ACE_ERROR_RETURN ((LM_ERROR,
                            ACE_TEXT ("%p\n"),
@@ -340,6 +342,16 @@ namespace
                           -1);
       }
 
+    if (listen_socket.get_local_addr (listen_addr) != 0)
+      {
+        ACE_ERROR_RETURN ((LM_ERROR,
+                           ACE_TEXT ("%p\n"),
+                           ACE_TEXT ("listen_socket.get_local_addr")),
+                          -1);
+      }
+
+    const int addr_family = listen_addr.get_type ();
+
     Accept_Handler handler;
     ACE_Asynch_Accept acceptor;
     if (acceptor.open (handler, listen_socket.get_handle (), 0, &proactor) != 0)
@@ -351,7 +363,7 @@ namespace
       }
 
     ACE_Message_Block mb (1024);
-    if (acceptor.accept (mb, 0, ACE_INVALID_HANDLE, 0, 0, ACE_SIGRTMIN, AF_INET) != 0)
+    if (acceptor.accept (mb, 0, ACE_INVALID_HANDLE, 0, 0, ACE_SIGRTMIN, addr_family) != 0)
       {
         ACE_ERROR_RETURN ((LM_ERROR,
                            ACE_TEXT ("%p\n"),
